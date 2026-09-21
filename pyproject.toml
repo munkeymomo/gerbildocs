@@ -1,0 +1,25 @@
+[project]
+name = "gerbildocs"
+version = "1.0.0"
+description = "Write papers, reports and grants as folders of reusable, id-referenced content."
+requires-python = ">=3.11"
+authors = [{ name = "Mark Isaacs" }]
+license = "MIT"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["B008"]            # FastAPI's Depends()/File() defaults are the idiom
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
