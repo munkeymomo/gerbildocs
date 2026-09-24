@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import io
+import re
 import shutil
 import sys
 import tempfile
@@ -252,6 +253,8 @@ def main() -> int:
         for name, needle in [
             ("cross-references can name several things", "function joinRefNums"),
             ("several can be picked at once", "function openRefPicker"),
+            ("text blocks can be saved and reused", "function openSnipPicker"),
+            ("the library has a view of its own", "function vLibrary"),
             ("author names are held in parts", "const NAME_STYLES"),
             ("the document has a language", "function applyLang"),
             ("British/American variants are checked", "function variantFor"),
@@ -261,6 +264,18 @@ def main() -> int:
             ("organisations have a postcode", "function orgAddress"),
         ]:
             check(name, needle in html, needle)
+
+        # The interface keeps its own copy of LIBRARY_KEYS, and a key present
+        # in one list and not the other is how a new document silently wipes
+        # somebody's shared library. Compare them rather than trusting them.
+        from app.services.store import LIBRARY_KEYS
+        m = re.search(r"const LIBRARY_KEYS=\[(.*?)\];", html)
+        page_keys = set(re.findall(r'"([^"]+)"', m.group(1))) if m else set()
+        check("the interface's library keys match the vault's",
+              page_keys == set(LIBRARY_KEYS),
+              "only in page: %s; only in vault: %s" % (
+                  sorted(page_keys - set(LIBRARY_KEYS)),
+                  sorted(set(LIBRARY_KEYS) - page_keys)))
 
         # The example document ships to strangers. Nobody's name, employer or
         # research topic belongs in it; the credit line in the header is the

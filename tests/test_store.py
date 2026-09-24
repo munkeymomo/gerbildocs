@@ -289,3 +289,33 @@ def test_settings_round_trip_and_default(tmp_path):
     assert st.get_setting("library_roots") == [{"path": "D:/Papers", "label": "Papers"}]
     st.put_setting("library_roots", [])
     assert st.get_setting("library_roots") == []
+
+
+def test_saved_text_blocks_are_library_scoped(tmp_path):
+    """A saved Experimental section belongs to the installation, not to the
+    paper it was written for — that is the whole point of saving it."""
+    import json
+
+    st = Store(tmp_path / "v.sqlite", library_dir=tmp_path / "library")
+    blocks = [{"id": "sn_1", "title": "XPS experimental", "folder": "Experimental",
+               "text": "Spectra were recorded on…\n\nBinding energies were referenced to…",
+               "updatedAt": "2026-09-24T12:00:00+00:00"}]
+    folders = ["Experimental", "Characterisation", "Unfiled"]
+
+    written = st.put_library({"snippets": blocks, "snippetFolders": folders})
+    assert set(written) == {"snippets", "snippetFolders"}
+
+    lib = st.get_library()
+    assert lib["snippets"] == blocks
+    assert lib["snippetFolders"] == folders
+
+    mirrored = json.loads((tmp_path / "library" / "snippets.json").read_text(encoding="utf-8"))
+    assert mirrored[0]["title"] == "XPS experimental"
+    assert "\n\n" in mirrored[0]["text"]          # the paragraph break survives
+
+    doc, library = st.split_state({"title": "A", "kind": "report",
+                                   "snippets": blocks, "snippetFolders": folders})
+    assert "snippets" not in doc and "snippetFolders" not in doc
+    d = st.create_document("A", "report", str(tmp_path / "a"), doc)
+    merged = st.merge_state(st.get_document(d)["state"])
+    assert merged["snippets"] == blocks and merged["snippetFolders"] == folders

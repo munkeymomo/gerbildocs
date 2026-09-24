@@ -1555,6 +1555,7 @@ function seed(){
     ],
     plots:[p1,p2,p3], images:[], figures:[fig1], refs,
     folders:["Unfiled","Example references"],
+    snippets:[], snippetFolders:SNIPPET_FOLDERS_DEFAULT.slice(),
     subdocs:{
       manuscript:{ sections:[
         {id:uid("s"),kind:"heading",title:"Introduction",blocks:[
@@ -1695,6 +1696,227 @@ function bibliography(){
   const nums=citedOrder(), keys=Object.keys(nums).filter(k=>nums[k]>0).sort((a,b)=>nums[a]-nums[b]);
   const km=refKeyMap();
   return keys.map(k=>({key:k,n:nums[k],ref:km[k]})).filter(x=>x.ref);
+}
+</script>
+<script>
+/* ============================ THE LIBRARY ============================
+   Saved blocks of prose, filed in folders, app-scoped like the reference
+   library. The job they exist to abolish is opening last year's manuscript to
+   copy the Experimental section out of it: a method you wrote once should be
+   reachable from every paper after it, not archaeology.
+
+   A block is plain paragraph text — the same markup a paragraph holds, `@`
+   tokens and all — with blank lines between paragraphs. On insertion each
+   paragraph becomes its own block, because that is what it was. */
+const SNIPPET_FOLDERS_DEFAULT=["Experimental","Characterisation","Statements","Unfiled"];
+function snippets(){ return S.snippets||(S.snippets=[]); }
+function snipFolders(){ return S.snippetFolders||(S.snippetFolders=SNIPPET_FOLDERS_DEFAULT.slice()); }
+function snipById(id){ return snippets().find(x=>x.id===id)||null; }
+function snipIn(folder){ return snippets().filter(x=>x.folder===folder); }
+/* The paragraphs a saved block will become. Blank lines separate them; a
+   block with no blank lines is one paragraph, which is the common case. */
+function snipParas(text){ return String(text||"").split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean); }
+function snipWords(text){ return snipParas(text).join(" ").split(/\s+/).filter(Boolean).length; }
+function snipSummary(x){
+  const p=snipParas(x.text);
+  return `${p.length} paragraph${p.length===1?"":"s"} · ${snipWords(x.text)} words`;
+}
+function saveSnippet(title, text, folder){
+  const x={id:uid("sn"), title:title||"Untitled block", folder:folder||snipFolders()[0],
+           text:String(text||""), updatedAt:nowISO()};
+  snippets().push(x);
+  return x;
+}
+
+/* ---------- saving out of the document ---------- */
+function snipSaveDialog(text, suggested){
+  if(!String(text||"").trim()){ toast("Nothing to save — that block is empty."); return; }
+  const paras=snipParas(text);
+  modal("Save to library",
+    `<div class="stack">
+      <div class="fld"><label>Name</label><input class="inp" id="snTitle" value="${esc(suggested||"")}" placeholder="e.g. XPS experimental"></div>
+      <div class="fld"><label>Folder</label>
+        <div class="row">
+          <select class="inp" id="snFolder">${snipFolders().map(f=>`<option>${esc(f)}</option>`).join("")}</select>
+          <input class="inp" id="snNewFolder" placeholder="…or a new folder" style="max-width:190px">
+        </div></div>
+      <div class="note">${paras.length} paragraph${paras.length===1?"":"s"}, ${snipWords(text)} words. Saved on this installation, not in this document — every paper after this one can insert it.</div>
+      <div class="fld"><label>What will be saved</label><textarea class="inp" id="snText" rows="7">${esc(text)}</textarea></div>
+    </div>`,
+    `<button class="btn" data-close>Cancel</button><button class="btn p" id="snGo">Save to library</button>`);
+  $("#snGo").onclick=()=>{
+    const nf=$("#snNewFolder").value.trim();
+    if(nf && !snipFolders().includes(nf)) snipFolders().push(nf);
+    const x=saveSnippet($("#snTitle").value.trim(), $("#snText").value, nf||$("#snFolder").value);
+    closeModal(); commit(`“${x.title}” saved to your library`);
+  };
+}
+/* A whole section, headings and all the prose in it. Figures, tables and
+   equations are left out on purpose: they belong to the document they were
+   made for, and a saved Experimental section that dragged Figure 3 along
+   with it would be a trap. */
+function snipSaveSection(sid){
+  const sec=S.subdocs[sub].sections.find(s=>s.id===sid); if(!sec) return;
+  const text=(sec.blocks||[]).filter(b=>b.type==="p"||b.type==="gen")
+    .map(b=>String(b.text||"").trim()).filter(Boolean).join("\n\n");
+  if(!text){ toast(`“${sec.title}” has no prose to save.`); return; }
+  const skipped=(sec.blocks||[]).length-(sec.blocks||[]).filter(b=>b.type==="p"||b.type==="gen").length;
+  snipSaveDialog(text, sec.title);
+  if(skipped){ const n=$("#scrim .note"); if(n) n.innerHTML+=` ${skipped} figure, table or equation block${skipped===1?"":"s"} in this section ${skipped===1?"is":"are"} left out — those belong to this document.`; }
+}
+
+/* ---------- inserting into the document ---------- */
+function openSnipPicker(sid,bid){
+  if(!snippets().length){
+    modal("Insert text from your library",
+      `<div class="empty">Your library has no saved blocks yet.<br><br>Save one with <b>Save to library</b> on a section, or from the right-click menu inside a paragraph. After that it is one click into any paper.</div>`,
+      `<button class="btn p" data-close>Close</button>`);
+    return;
+  }
+  const folders=snipFolders().filter(f=>snipIn(f).length);
+  modalState={sid,bid,folder:folders[0],q:"",picked:new Set(),folders};
+  modal("Insert text from your library",
+    `<div class="refpick">
+       <div class="refcats" id="snCats" role="tablist" aria-label="Folders"></div>
+       <div class="refbody">
+         <input class="inp" id="snQ" type="search" placeholder="Filter…" autocomplete="off" spellcheck="false" aria-label="Filter">
+         <ul class="lst" id="snList"></ul>
+       </div>
+     </div>`,
+    `<span class="refprev" id="snPrev"></span>
+     <button class="btn" data-close>Cancel</button>
+     <button class="btn p" id="snIns" disabled>Insert</button>`);
+  $("#snQ").oninput=e=>{ modalState.q=e.target.value; drawSnipList(); };
+  drawSnipCats(); drawSnipList();
+  $("#snIns").onclick=()=>{
+    const chosen=snipOrder();
+    if(!chosen.length) return;
+    const blocks=[];
+    chosen.forEach(x=>snipParas(x.text).forEach(t=>{ const b=newBlock("p"); b.text=t; stampBlock(b); blocks.push(b); }));
+    const st=modalState; closeModal();
+    if(!insSplit(st.sid,st.bid,blocks)) return;
+    commit(chosen.length===1 ? `“${chosen[0].title}” inserted`
+                             : `${chosen.length} blocks inserted (${blocks.length} paragraphs)`, {undo:true});
+    if(blocks[0]) focusBlock(blocks[0].id);
+  };
+}
+/* Chosen blocks go in the order they are listed, folder by folder, not in the
+   order they were ticked — the same two blocks should land the same way round
+   every time. */
+function snipOrder(){
+  const st=modalState; if(!st) return [];
+  const out=[];
+  st.folders.forEach(f=>snipIn(f).forEach(x=>{ if(st.picked.has(x.id)) out.push(x); }));
+  return out;
+}
+function drawSnipCats(){
+  const st=modalState, host=$("#snCats"); if(!host) return;
+  host.innerHTML=st.folders.map(f=>{
+    const items=snipIn(f), n=items.filter(x=>st.picked.has(x.id)).length;
+    return `<button type="button" class="refcat${f===st.folder?" on":""}" role="tab" aria-selected="${f===st.folder}" data-snfolder="${esc(f)}">
+      <span class="l">${esc(f)}</span><span class="n">${n?`<b>${n}</b>/`:""}${items.length}</span></button>`;
+  }).join("");
+  $$("#snCats [data-snfolder]").forEach(b=>b.onclick=()=>{ modalState.folder=b.dataset.snfolder; modalState.q=""; const q=$("#snQ"); if(q) q.value=""; drawSnipCats(); drawSnipList(); });
+}
+function drawSnipList(){
+  const st=modalState, host=$("#snList"); if(!host) return;
+  const terms=(st.q||"").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const items=snipIn(st.folder).filter(x=>{
+    if(st.picked.has(x.id)) return true;
+    if(!terms.length) return true;
+    const hay=`${x.title} ${x.text}`.toLowerCase();
+    return terms.every(t=>hay.includes(t));
+  });
+  host.innerHTML = items.length ? items.map(x=>{
+    const on=st.picked.has(x.id);
+    return `<li class="${on?"sel":""}"><label style="display:flex;gap:9px;align-items:flex-start;flex:1;cursor:pointer;min-width:0">
+      <input type="checkbox" data-snpick="${x.id}" ${on?"checked":""} style="margin-top:3px">
+      <span style="min-width:0">
+        <span class="ttl">${esc(x.title)}</span>
+        <span class="meta" style="display:block">${esc(snipSummary(x))}</span>
+        <span class="meta" style="display:block;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(snipParas(x.text)[0]||"")}</span>
+      </span></label></li>`;
+  }).join("") : `<li class="acnone">Nothing in this folder matches</li>`;
+  $$("#snList [data-snpick]").forEach(c=>c.onchange=()=>{
+    if(c.checked) st.picked.add(c.dataset.snpick); else st.picked.delete(c.dataset.snpick);
+    c.closest("li").classList.toggle("sel",c.checked);
+    drawSnipCats(); refreshSnipPrev();
+  });
+  refreshSnipPrev();
+}
+function refreshSnipPrev(){
+  const prev=$("#snPrev"), go=$("#snIns"); if(!prev) return;
+  const chosen=snipOrder();
+  if(!chosen.length){ prev.textContent="Nothing ticked yet"; prev.className="refprev dim"; if(go) go.disabled=true; return; }
+  const paras=chosen.reduce((a,x)=>a+snipParas(x.text).length,0);
+  const words=chosen.reduce((a,x)=>a+snipWords(x.text),0);
+  prev.innerHTML=`Will insert: <b>${chosen.length} block${chosen.length===1?"":"s"}</b> — ${paras} paragraph${paras===1?"":"s"}, ${words} words`;
+  prev.className="refprev"; if(go) go.disabled=false;
+}
+
+/* ---------- the library view ---------- */
+function vLibrary(){
+  const folders=snipFolders(), all=snippets();
+  const open=ui.libFolder&&folders.includes(ui.libFolder)?ui.libFolder:folders[0];
+  const items=snipIn(open);
+  return `
+  <div class="viewhead">
+    <div><h2>My library</h2><div class="sub">Kept on this installation, not in this document. Blocks of text you reuse, the people you write with, and where they work — all of it available to every paper you start.</div></div>
+    <div class="acts">
+      <button class="btn" id="snNew">+ Text block</button>
+      <button class="btn" id="snNewFolderBtn">+ Folder</button>
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:10px">
+    <header><h3>Text blocks</h3><span class="chip">${all.length} in ${folders.length} folder${folders.length===1?"":"s"}</span></header>
+    <div class="bd">
+      ${all.length?`<div class="refpick" style="min-height:0">
+        <div class="refcats">${folders.map(f=>{
+          const n=snipIn(f).length;
+          return `<button type="button" class="refcat${f===open?" on":""}" data-libfolder="${esc(f)}"><span class="l">${esc(f)}</span><span class="n">${n}</span></button>`;
+        }).join("")}</div>
+        <div class="refbody">
+          ${items.length?`<ul class="lst">${items.map(x=>`<li><div class="grow stack" style="gap:5px">
+            <div class="row">
+              <div class="fld"><label>Name</label><input class="inp" data-snf="${x.id}|title" value="${esc(x.title)}"></div>
+              <div class="fld" style="flex:0 0 200px"><label>Folder</label><select class="inp" data-snf="${x.id}|folder">${folders.map(f=>`<option${f===x.folder?" selected":""}>${esc(f)}</option>`).join("")}</select></div>
+            </div>
+            <div class="fld"><label>Text <span class="meta">${esc(snipSummary(x))} · blank line between paragraphs</span></label>
+              <textarea class="inp" data-snf="${x.id}|text" rows="5">${esc(x.text)}</textarea></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              <span class="meta">${x.updatedAt?"saved "+fmtDate(x.updatedAt):""}</span>
+              <button class="btn sm" data-sndup="${x.id}">Duplicate</button>
+              <button class="btn sm danger" data-sndel="${x.id}">Remove</button>
+            </div>
+          </div></li>`).join("")}</ul>`
+          :`<div class="empty">Nothing in <b>${esc(open)}</b> yet.</div>`}
+        </div></div>`
+      :`<div class="empty">No saved blocks yet.<br><br>Write a section once — an XPS experimental, a data availability statement — then use <b>Save to library</b> in its header. From then on it is one click into any paper, from <b>Insert ▾ → Text from library</b>.</div>`}
+    </div>
+  </div>
+  ${libPanelHTML({split:true})}
+  <div class="note">Everything on this page is shared by every document on this installation, and is mirrored to readable JSON in the vault's <span class="mono">library</span> folder, so none of it is locked up in a format only GerbilDocs can open.</div>`;
+}
+function wireLibrary(){
+  if(view!=="library") return;
+  on("[data-libfolder]","click",e=>{ ui.libFolder=e.currentTarget.dataset.libfolder; render(); });
+  on("[data-snf]","input",e=>{ const [id,k]=e.target.dataset.snf.split("|"); const x=snipById(id);
+    if(!x) return; x[k]=e.target.value; x.updatedAt=nowISO(); save(); });
+  on("[data-snf]","change",e=>{ const [,k]=e.target.dataset.snf.split("|"); if(k==="folder") render(); });
+  on("[data-sndup]","click",e=>{ const x=snipById(e.currentTarget.dataset.sndup); if(!x) return;
+    saveSnippet(x.title+" (copy)", x.text, x.folder); commit(`“${x.title}” duplicated`); });
+  on("[data-sndel]","click",e=>{ const id=e.currentTarget.dataset.sndel, x=snipById(id); if(!x) return;
+    S.snippets=snippets().filter(y=>y.id!==id); commit(`“${x.title}” removed from your library`,{undo:true}); });
+  const nb=$("#snNew"); if(nb) nb.onclick=()=>{
+    const x=saveSnippet("New text block","",ui.libFolder||snipFolders()[0]);
+    commit("Text block added"); reveal(`[data-snf="${x.id}|title"]`,true);
+    const t=$(`[data-snf="${x.id}|title"]`); if(t) t.select(); };
+  const nf=$("#snNewFolderBtn"); if(nf) nf.onclick=()=>{
+    modal("New folder",`<div class="fld"><label>Name</label><input class="inp" id="snFolderName" placeholder="e.g. Catalysis"></div>`,
+      `<button class="btn" data-close>Cancel</button><button class="btn p" id="snFolderGo">Add</button>`);
+    $("#snFolderGo").onclick=()=>{ const n=$("#snFolderName").value.trim(); if(!n) return;
+      if(!snipFolders().includes(n)) snipFolders().push(n);
+      ui.libFolder=n; closeModal(); commit(`Folder “${n}” added`); }; };
 }
 </script>
 <script>
@@ -1956,7 +2178,13 @@ function openCtx(ta,x,y){
   rows.push({sep:true,t:"Insert"});
   rows.push({t:"References…  <span class=\"ctxnote\">pick several</span>",run:()=>openRefPicker(ta)});
   rows.push({t:"One reference  <span class=\"ctxnote\">@</span>",run:()=>acOpenFromButton(ta)});
+  const blk=(ta.dataset.block||"").split("|");
+  if(blk.length===2) rows.push({t:"Text from library…",run:()=>{ insAt={sid:blk[0],bid:blk[1],pos:ta.selectionStart||0}; openSnipPicker(blk[0],blk[1]); }});
   if(typeof openProseSymbols==="function") rows.push({t:"Symbol…",run:()=>openProseSymbols(ta)});
+  if(blk.length===2){
+    rows.push({sep:true,t:"Library"});
+    rows.push({t:"Save this paragraph…",run:()=>snipSaveDialog(ta.value,"")});
+  }
   host.innerHTML=`<div class="ctxmenu" id="ctxMenu" role="menu">${rows.map((r,i)=>r.sep
     ? `<div class="ctxsep" role="presentation">${r.t}</div>`
     : `<button type="button" class="ctxitem${r.dim?" dim":""}" role="menuitem" data-ci="${i}"${r.dim?" disabled":""}>${r.t}</button>`).join("")}
@@ -2236,6 +2464,7 @@ const VIEWS=[
   {k:"equations",l:"Equations",g:"Assets",ct:()=>countEqs()+((S.equations||[]).length)},
   {k:"refs",l:"References",g:"Assets",ct:()=>S.refs.length},
   {k:"styles",l:"Style library",g:"Assets",ct:()=>(S.styleLib||[]).length},
+  {k:"library",l:"My library",g:"Assets",ct:()=>(S.snippets||[]).length+(S.peopleLib||[]).length+(S.orgLib||[]).length},
   {k:"format",l:"Formatting",g:"Assets",ct:()=>Object.keys((S&&S.format)||{}).length||""},
   {k:"templates",l:"Templates",g:"Assets",ct:()=>TEMPLATES.length+userTemplates().length},
   {k:"drafts",l:"Draft log",g:"Submission",ct:()=>S.revisions.length},
@@ -2286,8 +2515,8 @@ function render(){
   $("#rail").innerHTML=`<button class="navi" id="btnSearch" title="Jump to anything (Ctrl+K)" style="border:1px solid var(--line);background:var(--panel);margin-bottom:6px;color:var(--muted)">Search<span class="ct" style="font-family:var(--mono)">Ctrl K</span></button>`+VIEWS.map(v=>{
     let h=""; if(v.g!==g){ g=v.g; h=`<div class="grp">${esc(g)}</div>`; }
     return h+`<button class="navi" data-view="${v.k}"${v.k===view?' aria-current="page"':""}>${esc(v.l)}<span class="ct">${v.ct()}</span></button>`;}).join("");
-  $("#work").innerHTML=({write:vWrite,people:vPeople,samples:vSamples,defs:vDefs,figures:vFigures,plots:vPlots,tables:vTables,equations:vEquations,refs:vRefs,styles:vStyles,templates:vTemplates,format:vFormat,project:vProject,drafts:vDrafts,reviews:vReviews,files:vFiles}[view])();
-  wire(); wireFormat(); wireProject(); wireDeposit(); a11yLabels($("#work")); applyLang();
+  $("#work").innerHTML=({write:vWrite,people:vPeople,samples:vSamples,defs:vDefs,figures:vFigures,plots:vPlots,tables:vTables,equations:vEquations,refs:vRefs,styles:vStyles,library:vLibrary,templates:vTemplates,format:vFormat,project:vProject,drafts:vDrafts,reviews:vReviews,files:vFiles}[view])();
+  wire(); wireFormat(); wireProject(); wireDeposit(); wireLibrary(); a11yLabels($("#work")); applyLang();
 }
 /* Fields are written as <div class="fld"><label>…</label><input …></div> with no
    `for`. Give every such control its label's name, and mark selected list rows
@@ -2538,6 +2767,7 @@ function vWrite(){
           <button class="btn sm" data-addb="${sec.id}" data-t="fig">+ Figure</button>
           <button class="btn sm" data-addb="${sec.id}" data-t="tbl">+ Table</button>
           <button class="btn sm" data-addb="${sec.id}" data-t="gantt">+ Gantt</button>
+          <button class="btn sm" data-snipsave="${sec.id}" title="Save this section's prose to your library, for every paper after this one">Save to library</button>
           ${isExp?"":`<button class="btn sm danger" data-delsec="${sec.id}">Remove</button>`}
         </div>`}
       </header>
@@ -2748,6 +2978,7 @@ function blockEditor(sec,b){
     <div class="blkbar">
       ${blockGrip(sec,b)}
       <button class="btn sm" data-refpicker="${b.id}" title="Pick figures, tables, equations, citations, samples or acronyms — several at once">Reference…</button>
+      <button class="btn sm" data-snipins="${sec.id}|${b.id}" title="Insert saved text from your library at the caret">Library text…</button>
       <button class="btn sm" data-insmenu="${sec.id}|${b.id}" aria-haspopup="true" aria-expanded="false" title="Insert a figure, table, equation or Gantt chart at the caret — the paragraph splits around it">Insert ▾</button>
       <span class="hint" title="Inline maths">$x$ maths</span>
       <span class="wc" data-wc="${b.id}">${wordCount(b.text)} words</span>
@@ -4013,7 +4244,7 @@ document.addEventListener("click",e=>{
 });
 
 /* ================= INSERT A BLOCK AT THE CARET (Insert ▾) ================= */
-const INS_ITEMS=[["fig","Figure…"],["tbl","Table…"],["eq","Equation"],["gantt","Gantt chart"]];
+const INS_ITEMS=[["lib","Text from library…"],["fig","Figure…"],["tbl","Table…"],["eq","Equation"],["gantt","Gantt chart"]];
 let insAt=null;
 function closeInsMenu(){
   const m=$(".insmenu"); if(!m) return;
@@ -4075,6 +4306,7 @@ function focusEqLeaf(bid){
 }
 function insDo(sid,bid,kind){
   closeInsMenu();
+  if(kind==="lib"){ openSnipPicker(sid,bid); return; }
   if(kind==="eq"){ const b=newBlock("eq"); if(!insSplit(sid,bid,[b])) return; commit("Equation inserted"); focusEqLeaf(b.id); return; }
   if(kind==="gantt"){ const b=newBlock("gantt"); if(!insSplit(sid,bid,[b])) return; commit("Gantt chart inserted"); focusBlock(b.id); return; }
   insChooser(kind,sid,bid);
@@ -4342,7 +4574,12 @@ function libAddPerson(p){
    away, because a saved person needs correcting far less often than they need
    adding, and putting every field on screen made the panel the tallest thing
    in the view. */
-function libPanelHTML(){
+/* The saved people and organisations, in one of two shapes. In the Authors
+   view they are a single panel for reaching for somebody mid-byline; in the
+   Library view they are two sections of their own, alongside the saved text.
+   One renderer either way, so the two can never drift apart. */
+function libPanelHTML(opts){
+  opts=opts||{};
   const P=S.peopleLib||[], O=S.orgLib||[], edit=!!ui.libEdit;
   const person=p=>{
     const np=nameParts(p), where=(p.orgs||[]).map(x=>x.name).filter(Boolean).join(" · ");
@@ -4369,18 +4606,23 @@ function libPanelHTML(){
       <div class="row"><input class="inp mono" data-olf="${o.id}|ror" value="${esc(o.ror||"")}" placeholder="ROR id" aria-label="ROR id"></div>
       </div><div class="acts"><button class="btn sm" data-oluse="${o.id}">Add</button><button class="btn sm danger" data-oldel="${o.id}" aria-label="Remove ${esc(o.name||"")} from the library">×</button></div></li>`;
   };
-  return `<div class="panel"><header><h3>My library</h3><span class="chip">${P.length} people · ${O.length} organisations</span>
-    <div class="acts"><button class="btn sm" id="libEditToggle" aria-pressed="${edit}">${edit?"Done editing":"Edit"}</button></div></header>
+  const editBtn=`<div class="acts"><button class="btn sm" id="libEditToggle" aria-pressed="${edit}">${edit?"Done editing":"Edit"}</button></div>`;
+  const peopleList = P.length?`<ul class="lst">${P.map(person).join("")}</ul>`
+    :`<div class="empty">Nobody saved yet — <b>Save to library</b> on an author puts them here.</div>`;
+  const orgList = O.length?`<ul class="lst">${O.map(org).join("")}</ul>`
+    :`<div class="empty">No organisations saved yet.</div>`;
+
+  if(opts.split) return `
+    <div class="panel" style="margin-bottom:10px"><header><h3>Authors</h3><span class="chip">${P.length}</span>${editBtn}</header>
+      <div class="bd">${peopleList}</div></div>
+    <div class="panel" style="margin-bottom:10px"><header><h3>Organisations &amp; addresses</h3><span class="chip">${O.length}</span></header>
+      <div class="bd">${orgList}</div></div>`;
+
+  return `<div class="panel"><header><h3>My library</h3><span class="chip">${P.length} people · ${O.length} organisations</span>${editBtn}</header>
     <div class="bd stack">
       <div class="note">Kept on this installation, not in the document. <b>Add</b> puts one in this document${edit?"":" — use <b>Edit</b> to correct a saved entry"}.</div>
-      <div class="fld"><label>People</label>
-        ${P.length?`<ul class="lst">${P.map(person).join("")}</ul>`
-        :`<div class="empty">Nobody saved yet — <b>Save to library</b> on an author puts them here.</div>`}
-      </div>
-      <div class="fld"><label>Organisations</label>
-        ${O.length?`<ul class="lst">${O.map(org).join("")}</ul>`
-        :`<div class="empty">No organisations saved yet.</div>`}
-      </div>
+      <div class="fld"><label>People</label>${peopleList}</div>
+      <div class="fld"><label>Organisations</label>${orgList}</div>
     </div></div>`;
 }
 function vPeople(){
@@ -7593,12 +7835,13 @@ function blankState(kind,title){
     authors:[], orgs:[], funding:"", keywords:[], edition:"desktop", example:false,
     me:{name:"",initials:"",colour:EDCOLOURS[0]}, sampleProps:[], samples:[], defs:[],
     glossary:false, redefineInSI:true, tables:[], attachments:[], plots:[], images:[], figures:[], refs:[],
-    folders:["Unfiled"], subdocs, revisions:[], reviews:[], repo:"", datasetDoi:"", ensImport:ENS_SAMPLE, createdAt:nowISO() };
+    folders:["Unfiled"], snippets:[], snippetFolders:SNIPPET_FOLDERS_DEFAULT.slice(),
+    subdocs, revisions:[], reviews:[], repo:"", datasetDoi:"", ensImport:ENS_SAMPLE, createdAt:nowISO() };
 }
 /* Mirrors store.LIBRARY_KEYS. When a new document is sent to the vault, any
    of these it carries would REPLACE the shared set — so they are sent only
    when the vault has no value for them yet (a fresh install). */
-const LIBRARY_KEYS=["refs","folders","styleLib","plots","images","samples","sampleProps","defs","me","templates","peopleLib","orgLib"];
+const LIBRARY_KEYS=["refs","folders","styleLib","plots","images","samples","sampleProps","defs","me","templates","peopleLib","orgLib","snippets","snippetFolders"];
 function withoutExistingLibrary(state,lib){ const st=Object.assign({},state); LIBRARY_KEYS.forEach(k=>{ if(lib && k in lib) delete st[k]; }); return st; }
 function openNewDoc(){
   const online=vaultOnline();
@@ -7982,6 +8225,10 @@ function wire(){
   on("[data-block]","keyup",e=>rememberCaret(e.target));
   on("[data-acopen]","click",e=>{ const ta=$(`[data-block$="|${e.currentTarget.dataset.acopen}"]`); if(ta) acOpenFromButton(ta); });
   on("[data-refpicker]","click",e=>{ const ta=$(`[data-block$="|${e.currentTarget.dataset.refpicker}"]`); if(ta) openRefPicker(ta); });
+  on("[data-snipins]","click",e=>{ const [sid,bid]=e.currentTarget.dataset.snipins.split("|");
+    /* The caret decides where it lands, exactly as the Insert menu does. */
+    insAt={sid,bid,pos:insReadCaret(sid,bid)||0}; openSnipPicker(sid,bid); });
+  on("[data-snipsave]","click",e=>snipSaveSection(e.currentTarget.dataset.snipsave));
   on("[data-sectitle]","input",e=>{ const sec=S.subdocs[sub].sections.find(s=>s.id===e.target.dataset.sectitle);
     sec.title=e.target.value; save(); refreshPreview(); });
   const addSec=$("#addSec"); if(addSec) addSec.onclick=()=>addSection(1);
@@ -8735,6 +8982,12 @@ function migrate(){
      start empty in both editions — never back-filled from the example. */
   if(!Array.isArray(S.peopleLib)) S.peopleLib=[];
   if(!Array.isArray(S.orgLib)) S.orgLib=[];
+  /* Saved blocks of prose and the folders they are filed under. App-scoped,
+     and empty until the user saves something — nobody's first run should
+     start with somebody else's Experimental section. */
+  if(!Array.isArray(S.snippets)) S.snippets=[];
+  if(!Array.isArray(S.snippetFolders)||!S.snippetFolders.length) S.snippetFolders=SNIPPET_FOLDERS_DEFAULT.slice();
+  S.snippets.forEach(x=>{ if(!x.folder||!S.snippetFolders.includes(x.folder)) x.folder=S.snippetFolders[0]; });
   /* Placement and width are per figure only when set; unset ones follow the
      document format (Formatting view). Documents saved before that existed
      had every figure stamped inline/double — those stamps stay as the
@@ -8785,7 +9038,7 @@ function isEditing(el){ return !!el&&(el.tagName==="TEXTAREA"||(el.tagName==="IN
 /* ---- credit bar: support link and About ----
    The desktop backend may inject window.__DESK_PROFILE from profile.json;
    opened on its own the page falls back to the placeholder below. */
-const APP_VERSION="1.1.0";
+const APP_VERSION="1.2.0";
 /* The backend reports the version it is actually running; standalone, the
    constant above is the whole truth. */
 function appVersion(){ try{ return (DESK.info&&DESK.info.version)||APP_VERSION; }catch(e){ return APP_VERSION; } }

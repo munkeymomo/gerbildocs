@@ -56,8 +56,13 @@ GENERATED = {
     "app/static/vendor/mathjax/VERSION.json",
 }
 
-SKIP_SUFFIXES = {".pyc", ".pyo", ".pyd", ".log", ".sqlite", ".spec~"}
+SKIP_SUFFIXES = {".pyc", ".pyo", ".pyd", ".log", ".err", ".sqlite", ".spec~"}
 SKIP_NAMES = {".DS_Store", "Thumbs.db", "build-log.txt", "build-err.txt"}
+# Scratch at the top of the tree. A throwaway script written to check
+# something, left behind for ten minutes, is long enough to end up in a public
+# download — so anything at the root whose name starts with an underscore is
+# treated as scratch and left out. Nothing the project needs is named that way.
+SCRATCH_PREFIX = "_"
 
 
 def version() -> str:
@@ -84,6 +89,8 @@ def source_files() -> list[Path]:
         if rel.as_posix() in PRIVATE or rel.as_posix() in GENERATED:
             continue
         if path.suffix in SKIP_SUFFIXES or path.name in SKIP_NAMES:
+            continue
+        if len(rel.parts) == 1 and rel.name.startswith(SCRATCH_PREFIX):
             continue
         out.append(path)
     return out

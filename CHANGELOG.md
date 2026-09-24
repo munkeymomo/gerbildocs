@@ -3,6 +3,40 @@
 All notable changes to GerbilDocs are recorded here. GerbilDocs is released
 under the MIT licence. Dates are ISO.
 
+## 1.2.0 — 2026-09-24
+
+### Added
+
+- **My library**: a view of its own for everything kept on this installation
+  rather than in one document. Blocks of saved text, filed in folders you
+  name; the people you write with; the organisations and addresses they
+  belong to.
+- Saved text blocks. Write an experimental section, a data availability
+  statement or a characterisation method once, save it with **Save to
+  library** in a section header or from the right-click menu inside a
+  paragraph, and insert it into any paper afterwards — from **Library text…**
+  on the block bar, **Insert ▾ → Text from library**, or the right-click menu.
+  The picker takes several at once: folders on the left, tick boxes on the
+  right, and a count of what will be inserted before it is. A block splits
+  back into its paragraphs on insertion, and goes in at the caret, so a
+  paragraph you are halfway through is not disturbed.
+- Saving a section leaves its figures, tables and equations behind on purpose.
+  They belong to the document they were made for, and a saved Experimental
+  section that dragged Figure 3 along with it would be a trap.
+
+### Changed
+
+- The saved people and organisations are now sections of the library view —
+  Authors, and Organisations & addresses — as well as the quick-add panel
+  beside the byline, from one renderer so the two cannot drift.
+
+### Fixed
+
+- The self-check now compares the interface's copy of the library key list
+  against the vault's, so a key added to one and not the other — the mistake
+  that silently empties a shared library on the next new document — fails the
+  build rather than a user's afternoon.
+
 ## 1.1.0 — 2026-09-24
 
 ### Added

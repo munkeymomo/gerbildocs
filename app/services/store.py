@@ -54,9 +54,13 @@ BACKUPS_KEPT = 5
 # `peopleLib` and `orgLib` are the saved people and organisations a user reuses
 # across papers — the same argument as the reference library: typed once on the
 # installation, drawn on by every document. This is the settled place for them.
+# `snippets` and `snippetFolders` are saved blocks of prose — the XPS
+# experimental section, a data availability statement — with the folders they
+# are filed under. Reused across papers by definition: copying one out of last
+# year's manuscript is exactly the job they exist to abolish.
 LIBRARY_KEYS = ("refs", "folders", "styleLib", "plots", "images",
                 "samples", "sampleProps", "defs", "me", "templates",
-                "peopleLib", "orgLib")
+                "peopleLib", "orgLib", "snippets", "snippetFolders")
 
 
 class VaultTooNew(RuntimeError):
