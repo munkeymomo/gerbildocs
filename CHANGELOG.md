@@ -3,6 +3,56 @@
 All notable changes to GerbilDocs are recorded here. GerbilDocs is released
 under the MIT licence. Dates are ISO.
 
+## 1.1.0 — 2026-09-24
+
+### Added
+
+- A cross-reference can name several things at once. The **Reference…** button
+  opens a picker: choose a kind on the left — figures, SI figures, tables,
+  equations, citations, samples, acronyms — tick what you want, and insert them
+  all. Three figures become "Figs. S1–3", and the range re-collapses itself
+  when a figure is inserted in the middle of the run. Non-consecutive numbers
+  read as "Figs. 1, 3 and 5", and the label pluralises according to the layout
+  ("Figure"/"Figures", "FIG."/"FIGS."). Ticks may cross kinds; one token is
+  built per kind and the footer shows the finished text before anything is
+  inserted. Typing `@` still inserts one thing, as it did.
+- Sections and sub-sections can be added from a strip that rides with the
+  text, instead of only from the top of the view. The strip also names the
+  section currently under the reader.
+- A document language, which is what the browser's spell-checker underlines
+  against and what hyphenation follows.
+- A British/American spelling check, which no dictionary can do — "color" and
+  "colour" are both real words, and only the document's language makes one of
+  them wrong. Right-click a word for the correction, or review the whole
+  document at once from Formatting.
+- A right-click menu in the editor offering that correction and synonyms for
+  the words scientific prose wears out. Shift + right-click still reaches the
+  system's own spelling menu.
+- An AVS (JVST) submission template: single column, double-spaced, which is
+  what the journal asks you to send. The existing two-column AVS template is
+  now labelled as the published look, not for submission.
+- A first-line indent switch, next to the measurement it sets.
+- Authors are held as given name, initials and surname, with a name style
+  chosen by the layout — "Jane A. Doe", "J. A. Doe" or "Doe, J. A." — so one
+  setting restyles the whole byline. Surname particles ("van der", "dos") stay
+  with the surname in both the typed and the reference-manager order.
+- Organisations have a postcode, printed with the town rather than as another
+  comma-separated field.
+
+### Changed
+
+- The saved people and organisations panel is a list for adding, with the
+  fields behind an Edit button.
+- The example document is now generic placeholder content — invented people,
+  an invented journal and an unnamed material — instead of a real manuscript.
+
+### Fixed
+
+- A `profile.json` carrying a byte-order mark, which Notepad and PowerShell
+  both write, stopped the application starting. Every JSON file the
+  application reads now tolerates one, and a profile that cannot be read is
+  reported and ignored rather than being allowed to prevent a launch.
+
 ## 1.0.0 — 2026-09-21
 
 First public release.

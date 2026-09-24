@@ -269,6 +269,13 @@ textarea.inp{resize:vertical;min-height:70px;line-height:1.6}
 @media(max-width:900px){.cols{grid-template-columns:minmax(0,1fr)!important}}
 .stack{display:flex;flex-direction:column;gap:10px}
 .sticky{position:sticky;top:92px}
+/* The section list runs to several screens, and a new heading was only ever
+   reachable from the top of the view. This strip rides with the text. */
+.secbar{position:sticky;top:84px;z-index:20;display:flex;gap:7px;flex-wrap:wrap;align-items:center;
+  margin:0 0 10px;padding:7px 9px;border:1px solid var(--line);border-radius:10px;
+  background:color-mix(in srgb, var(--panel) 92%, transparent);backdrop-filter:saturate(1.5) blur(10px)}
+.secbar .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-right:2px}
+.secbar .where{margin-left:auto;font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:24ch}
 
 /* ---------- lists ---------- */
 .lst{display:flex;flex-direction:column}
@@ -450,6 +457,35 @@ kbd.k{font-family:var(--mono);font-size:10.5px;background:var(--sunk);border:1px
 .ac li .tok{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
 .ac li .lab mark{background:none;color:var(--brand);font-weight:600}
 .ac .acnone{padding:8px 10px;font-size:12px;color:var(--muted)}
+.refpick{display:flex;gap:14px;align-items:stretch;min-height:320px}
+.refcats{flex:0 0 190px;display:flex;flex-direction:column;gap:3px;border-right:1px solid var(--line);padding-right:12px}
+.refcat{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid transparent;background:none;
+  color:var(--ink);font:inherit;font-size:12.5px;padding:7px 9px;border-radius:8px;cursor:pointer}
+.refcat:hover{background:var(--brand-wash)}
+.refcat.on{background:var(--brand-wash);border-color:var(--brand);color:var(--brand-ink);font-weight:600}
+.refcat .l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.refcat .n{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.refcat.on .n{color:var(--brand-ink)}
+.refbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+.refbody .lst{flex:1;max-height:360px;overflow:auto;margin:0}
+.refprev{margin-right:auto;font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:56ch}
+.refprev.dim{color:var(--faint)}
+@media (max-width:720px){
+  .refpick{flex-direction:column}
+  .refcats{flex:0 0 auto;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:0 0 8px}
+  .refcat{width:auto;white-space:nowrap}
+  .refprev{max-width:100%;white-space:normal}
+}
+.ctxmenu{position:absolute;z-index:98;min-width:210px;max-width:300px;background:var(--panel);
+  border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow-lg);padding:4px}
+.ctxmenu .ctxitem{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ink);
+  font:inherit;font-size:12.5px;padding:6px 9px;border-radius:6px;cursor:pointer}
+.ctxmenu .ctxitem:hover:not(.dim){background:var(--brand-wash);color:var(--brand-ink)}
+.ctxmenu .ctxitem.dim{color:var(--muted);cursor:default}
+.ctxmenu .ctxsep{padding:7px 9px 3px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+.ctxmenu .ctxnote{color:var(--muted);font-size:11px}
+.ctxmenu .ctxfoot{padding:6px 9px;margin-top:3px;border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
+.ac .acfoot{display:block;padding:7px 10px;margin-top:3px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);cursor:default}
 
 /* ---------- writing surface: chrome recedes until the block has focus ---------- */
 .blk{position:relative;border-radius:var(--r)}
@@ -514,6 +550,7 @@ details.pgrp>.bd{border-top:1px solid var(--line)}
   .navi .ct{display:none}
   .work{padding:14px 16px 50px}
   .sticky{position:static}
+  .secbar{position:static}
   .tb2{flex-wrap:wrap}
   .subtabs{flex-basis:100%}
   .stylerow{padding-bottom:8px}
@@ -671,7 +708,7 @@ table.pubtable input.cell:focus{background:var(--brand-wash);outline-offset:-2px
 /* ---------- print ---------- */
 #printRoot{display:none}
 @media print{
-  .app,#modalHost,#toastHost,#pvHost,#pgHost,#palHost,#acHost,#tourHost{display:none!important}
+  .app,#modalHost,#toastHost,#pvHost,#pgHost,#palHost,#acHost,#ctxHost,#tourHost{display:none!important}
   #printRoot{display:block!important}
   /* The page size is written by doPrint() into #printPageStyle to match the
      format; the margins are zero because every .page carries its own. */
@@ -740,6 +777,7 @@ window.MathJax = { tex:{inlineMath:[["$","$"]], displayMath:[["$$","$$"]], packa
 <div id="modalHost"></div>
 <div id="palHost"></div>
 <div id="acHost"></div>
+<div id="ctxHost"></div>
 <div id="toastHost" role="status" aria-live="polite"></div>
 
 <script>
@@ -761,69 +799,60 @@ const fmtDate = t => new Date(t).toLocaleString(undefined,{day:"2-digit",month:"
 const fmtDay = t => new Date(t).toLocaleDateString(undefined,{day:"2-digit",month:"short",year:"numeric"});
 
 /* ---------- seed: Mark's own AFM paper, parsed from the RIS he exported ---------- */
+/* The example document's references. Deliberately invented: placeholder names
+   and a placeholder journal, so nothing here can be mistaken for a real paper
+   or a real person. Everything a reference needs is present, so the citation
+   styles have something to format. */
 const SEED_RIS = `TY  - JOUR
-T1  - Understanding the Chemical and Electronic Properties of Sub-Monolayer TiO2 on High Surface Area Silica for Jet Fuel Synthesis Applications
-AU  - Isaacs, Mark A.
-AU  - Drivas, Charalampos
-AU  - Graf, Arthur
-AU  - Kroon, Sasha
-AU  - Kumar, Santosh
-AU  - Liu, Junxi
-AU  - Torres-Lopez, Antonio
-AU  - Price, Cameron
-AU  - Garland, Edward
-AU  - Lezcano-Gonzalez, Ines
-AU  - Parlett, Christopher. M. A.
-AU  - Santos-Durndell, Vannia C. dos
-AU  - Durndell, Lee J.
+T1  - Effect of treatment temperature on the surface composition of a supported oxide
+AU  - Doe, Jane
+AU  - Roe, Richard
+AU  - Other, A. N.
 PY  - 2026
-DO  - 10.1002/adfm.202502818
-T2  - Advanced Functional Materials
-JA  - Adv. Funct. Mater.
-SP  - e02818
-VL  - 36
+DO  - 10.0000/jexs.2026.0001
+T2  - Journal of Example Studies
+JA  - J. Ex. Stud.
+SP  - 1
+VL  - 12
 IS  - 1
-KW  - hierarchical titania
-KW  - photocatalysis
-KW  - sustainable aviation fuels
-PB  - John Wiley & Sons, Ltd
-SN  - 1616-301X
-UR  - https://doi.org/10.1002/adfm.202502818
+KW  - example
+KW  - surface composition
+KW  - placeholder
+PB  - Example Publishing
+SN  - 0000-0000
+UR  - https://doi.org/10.0000/jexs.2026.0001
 ER  -
 TY  - JOUR
-T1  - Mesoporous silica-supported titania for the selective production of jet fuel precursors
-AU  - Parlett, Christopher M. A.
-AU  - Durndell, Lee J.
-AU  - Isaacs, Mark A.
+T1  - A general method for preparing supported oxide materials
+AU  - Roe, Richard
+AU  - Doe, Jane
+PY  - 2025
+T2  - Journal of Example Studies
+JA  - J. Ex. Stud.
+VL  - 11
+SP  - 204
+DO  - 10.0000/jexs.2025.0204
+ER  -
+TY  - JOUR
+T1  - Measuring surface coverage: a short review
+AU  - Other, A. N.
 PY  - 2024
-T2  - ACS Catalysis
-JA  - ACS Catal.
-VL  - 14
-SP  - 8811
-DO  - 10.1021/acscatal.4c01922
+T2  - Reviews in Example Science
+JA  - Rev. Ex. Sci.
+VL  - 8
+SP  - 77
+DO  - 10.0000/res.2024.0077
 ER  -
 TY  - JOUR
-T1  - Quantifying sub-monolayer coverage by ion scattering spectroscopy
-AU  - Graf, Arthur
-AU  - Isaacs, Mark A.
-PY  - 2025
-T2  - Surface and Interface Analysis
-JA  - Surf. Interface Anal.
-VL  - 57
-SP  - 214
-DO  - 10.1002/sia.7412
-ER  -
-TY  - JOUR
-T1  - Auger parameter analysis of dispersed titania phases
-AU  - Drivas, Charalampos
-AU  - Kroon, Sasha
-AU  - Isaacs, Mark A.
-PY  - 2025
-T2  - Journal of Physical Chemistry C
-JA  - J. Phys. Chem. C
-VL  - 129
-SP  - 4402
-DO  - 10.1021/acs.jpcc.5b00114
+T1  - Reference data for the example series
+AU  - Doe, Jane
+AU  - Other, A. N.
+PY  - 2023
+T2  - Journal of Example Studies
+JA  - J. Ex. Stud.
+VL  - 9
+SP  - 412
+DO  - 10.0000/jexs.2023.0412
 ER  -`;
 
 /* Literal strings recovered from the uploaded Advanced Functional Materials.ens
@@ -1294,7 +1323,7 @@ const DEFAULT_FORMAT = {
   },
   captions:{figureLabel:"Figure", figureRef:"Figure", tableLabel:"Table", tableRef:"Table", siPrefix:"S", sep:".", bold:true},
   figures:{placement:"inline", span:"double"},
-  authorBlock:{place:"block", mark:"number"},
+  authorBlock:{place:"block", mark:"number", nameStyle:"first-last"},
   headings:{numbering:"none"},
   colours:{accent:"#000000", rule:"#000000"}
 };
@@ -1361,6 +1390,51 @@ function capLabel(kind, n, inText){
   return `${word||(kind==="fig"?"Figure":"Table")} ${n}`;
 }
 function capSep(){ const s=docFormat().captions.sep; return s==null?".":s; }
+/* ---------- cross-references to more than one thing ----------
+   "Figs. S1-3" is not three references typed together: it is one reference
+   whose numbers happen to run on, and it has to re-collapse itself when a
+   figure is inserted in the middle of the run. So a token may carry several
+   keys and the printed form is derived, exactly as a single number is. */
+function pluralLabel(w){
+  const x=String(w||""); if(!x) return x;
+  const up = x===x.toUpperCase();          // FIG. -> FIGS., Fig. -> Figs.
+  return x.endsWith(".") ? x.slice(0,-1)+(up?"S.":"s.") : x+(up?"S":"s");
+}
+function numParts(n){ const m=/^([A-Za-z]*)(\d+)$/.exec(String(n)); return m?{p:m[1],n:+m[2]}:null; }
+/* Consecutive numbers with the same prefix collapse from three onwards —
+   "1, 2" stays "1 and 2", because "1-2" saves nothing and reads worse. The
+   far end of a range drops the prefix: S1, S2, S3 -> "S1-3". */
+function joinRefNums(list){
+  const seen=new Set(), items=[];
+  list.forEach(x=>{ const k=String(x); if(!seen.has(k)){ seen.add(k); items.push(k); } });
+  items.sort((a,b)=>{ const A=numParts(a), B=numParts(b);
+    if(!A||!B) return String(a).localeCompare(String(b));
+    return A.p===B.p ? A.n-B.n : A.p.localeCompare(B.p); });
+  const parts=[]; let run=[];
+  const flush=()=>{ if(!run.length) return;
+    if(run.length>=3) parts.push(`${run[0].raw}\u2013${run[run.length-1].n}`);
+    else run.forEach(x=>parts.push(x.raw));
+    run=[]; };
+  items.forEach(raw=>{
+    const pv=numParts(raw);
+    if(!pv){ flush(); parts.push(raw); return; }
+    const last=run[run.length-1];
+    if(last && last.p===pv.p && pv.n===last.n+1) run.push({p:pv.p,n:pv.n,raw});
+    else { flush(); run=[{p:pv.p,n:pv.n,raw}]; }
+  });
+  flush();
+  if(parts.length<=1) return parts.join("");
+  return parts.slice(0,-1).join(", ")+" and "+parts[parts.length-1];
+}
+/* One or many, of a kind. `nums` are the printed numbers, not the keys. */
+function xrefLabel(kind, nums){
+  const C=docFormat().captions;
+  let word = kind==="fig" ? (C.figureRef||"Figure")
+           : kind==="tbl" ? (C.tableRef||"Table")
+           : "Equation";
+  if(nums.length>1) word=pluralLabel(word);
+  return `${word} ${joinRefNums(nums)}`;
+}
 
 /* ---------- state ---------- */
 const SUBDOCS = {
@@ -1371,139 +1445,146 @@ const SUBDOCS = {
 const KIND_LABEL={publication:"Publication",report:"Report",grant:"Grant application"};
 let S=null, view="write", sub="manuscript", ui={plot:null,fig:null,tbl:null,eq:null,ref:null,slot:null,diffA:null,diffB:null,review:null,folded:new Set(),eqLatex:new Set(),depFold:new Set()};
 
+/* The example document. It exists to show what every view does with something
+   in it, so it is written as an obvious placeholder: invented people, an
+   invented journal, an unnamed material and quantities called what they are.
+   Anyone opening it for the first time should be able to tell at a glance that
+   none of it is real, and should not have to delete somebody else's project
+   before starting their own. */
 function seed(){
   const refs=parseRIS(SEED_RIS);
-  const p1={ id:uid("plot"), name:"Ti 2p — coverage series", ref:"P1", demo:true,
-    caption:"Ti 2p spectra as a function of nominal titania coverage, normalised to the Si 2p envelope",
+  const p1={ id:uid("plot"), name:"Signal against energy", ref:"P1", demo:true,
+    caption:"Measured signal for each sample in the series, normalised to the largest peak",
     chartType:"line", xReversed:true, grid:true, legend:true,
-    xAxis:{label:"Binding energy",unit:"eV"}, yAxis:{label:"Intensity",unit:"a.u."},
+    xAxis:{label:"Energy",unit:"eV"}, yAxis:{label:"Signal",unit:"a.u."},
     series:[
-      {name:"0.3 ML", colour:"#175FFF", fill:true, gradient:true, fillOpacity:.3, width:1.7,
+      {name:"Sample A", colour:"#175FFF", fill:true, gradient:true, fillOpacity:.3, width:1.7,
        x:[466,465,464.5,464,463.5,463,462,461,460,459.5,459,458.5,458,457.5,457,456],
        y:[0.02,0.05,0.12,0.28,0.44,0.35,0.16,0.11,0.22,0.48,0.82,1.00,0.74,0.31,0.09,0.03]},
-      {name:"0.7 ML", colour:"#E4572E", fill:true, gradient:true, fillOpacity:.3, width:1.7,
+      {name:"Sample B", colour:"#E4572E", fill:true, gradient:true, fillOpacity:.3, width:1.7,
        x:[466,465,464.5,464,463.5,463,462,461,460,459.5,459,458.5,458,457.5,457,456],
        y:[0.03,0.08,0.19,0.41,0.58,0.44,0.20,0.15,0.30,0.62,0.95,1.28,0.98,0.42,0.12,0.04]},
-      {name:"1.4 ML", colour:"#0B7A52", fill:true, gradient:true, fillOpacity:.3, width:1.7,
+      {name:"Sample C", colour:"#0B7A52", fill:true, gradient:true, fillOpacity:.3, width:1.7,
        x:[466,465,464.5,464,463.5,463,462,461,460,459.5,459,458.5,458,457.5,457,456],
        y:[0.04,0.11,0.27,0.55,0.74,0.55,0.24,0.18,0.38,0.79,1.24,1.62,1.22,0.52,0.15,0.05]}
     ]};
-  const p2={ id:uid("plot"), name:"F2Cp yield vs Ti coverage", ref:"P2", demo:true,
-    caption:"F2Cp yield after 6 h solvent-free photocatalysis, plotted against Ti surface coverage",
+  const p2={ id:uid("plot"), name:"Response against treatment temperature", ref:"P2", demo:true,
+    caption:"Measured response after treatment, plotted against treatment temperature",
     chartType:"scatter", grid:true, legend:true, yFromZero:true,
-    xAxis:{label:"Ti coverage",unit:"ML"}, yAxis:{label:"F2Cp yield",unit:"%"},
-    series:[{name:"Ti-SBA-15", colour:"#7B4BC9", markers:true, width:1.6,
-      x:[0.15,0.3,0.5,0.7,0.95,1.15,1.4,1.8], y:[8,17,31,44,52,49,38,26]},
-      {name:"bulk TiO₂", colour:"#8892AB", markers:true, dashed:true, width:1.4,
-      x:[0.15,1.8], y:[13,13]}]};
-  const p3={ id:uid("plot"), name:"Surface composition at 0.7 ML", ref:"P3", demo:true,
-    caption:"Surface atomic composition at 0.7 ML nominal coverage from survey quantification",
+    xAxis:{label:"Treatment temperature",unit:"°C"}, yAxis:{label:"Response",unit:"%"},
+    series:[{name:"Series 1", colour:"#7B4BC9", markers:true, width:1.6,
+      x:[200,300,400,500,600,700,800,900], y:[8,17,31,44,52,49,38,26]},
+      {name:"Control", colour:"#8892AB", markers:true, dashed:true, width:1.4,
+      x:[200,900], y:[13,13]}]};
+  const p3={ id:uid("plot"), name:"Composition of Sample B", ref:"P3", demo:true,
+    caption:"Composition of Sample B, by component",
     chartType:"bar", grid:true, legend:false, yFromZero:true,
-    xAxis:{label:"Element",unit:""}, yAxis:{label:"Surface concentration",unit:"at.%"},
-    xLabels:["O 1s","Si 2p","Ti 2p","C 1s"],
-    series:[{name:"at.%", colour:"#175FFF", fillOpacity:.88, x:["O 1s","Si 2p","Ti 2p","C 1s"], y:[58.4,27.1,4.9,9.6]}]};
-  const fig1={ id:uid("fig"), ref:"F1", layout:"1+2", leadIn:"Surface speciation of sub-monolayer titania on SBA-15.",
-    panels:[{src:p1.id,cap:"Ti 2p spectra across the coverage series"},{src:p3.id,cap:"survey quantification at 0.7 ML"},{src:null,cap:""}] };
+    xAxis:{label:"Component",unit:""}, yAxis:{label:"Amount",unit:"%"},
+    xLabels:["Component 1","Component 2","Component 3","Component 4"],
+    series:[{name:"%", colour:"#175FFF", fillOpacity:.88, x:["Component 1","Component 2","Component 3","Component 4"], y:[58.4,27.1,4.9,9.6]}]};
+  const fig1={ id:uid("fig"), ref:"F1", layout:"1+2", leadIn:"Measurements across the sample series.",
+    panels:[{src:p1.id,cap:"signal for each sample"},{src:p3.id,cap:"composition of Sample B"},{src:null,cap:""}] };
   const now=nowISO();
   return {
     kind:"publication",
-    title:"Understanding the Chemical and Electronic Properties of Sub-Monolayer TiO2 on High Surface Area Silica for Jet Fuel Synthesis Applications",
-    dir:"D:/Papers/2026-AFM-TiSBA15",
-    runningHead:"Sub-monolayer TiO2 on SBA-15 for SAF synthesis",
-    abstract:"Solvent-free photocatalytic coupling of furfural and cyclopentanone over sub-monolayer Ti-SBA-15 gives the jet fuel precursor F2Cp in fourfold higher yield than bulk titania. XPS, UPS, REELS and ISS resolve the transition from isolated Ti atoms to interconnected Ti-O-Ti networks with increasing coverage, and the Auger parameter tracks the accompanying rise in surface polarisability. Activity follows speciation rather than loading, peaking just below one monolayer.",
+    title:"Effect of treatment temperature on the surface composition of a supported oxide",
+    dir:"",
+    lang:"en-GB",
+    runningHead:"Treatment temperature and surface composition",
+    abstract:"This is the example document. It shows what a finished manuscript looks like in each view, with placeholder text throughout: an unnamed material, samples called A to C, and measurements labelled by what they are rather than what they were. Replace the front matter, delete the sections you do not need, and the numbering, citations and cross-references will follow. Nothing here is real data.",
     style:"st_afm",
     styleLib:[
       {id:"st_afm",label:"Advanced Functional Materials (Wiley)",base:"afm",source:"from Advanced Functional Materials.ens",abstractLimit:200,lastUsed:nowISO()},
       {id:"st_acs",label:"ACS Catalysis",base:"acs",source:"built-in",abstractLimit:250,lastUsed:new Date(Date.now()-86400000*40).toISOString()},
       {id:"st_rsc",label:"RSC journals (general)",base:"rsc",source:"built-in",abstractLimit:250,lastUsed:new Date(Date.now()-86400000*120).toISOString()},
-      {id:"st_apa",label:"EPSRC report (author-date)",base:"apa",source:"built-in",abstractLimit:300,lastUsed:null},
+      {id:"st_apa",label:"Funder report (author-date)",base:"apa",source:"built-in",abstractLimit:300,lastUsed:null},
       {id:"st_nature",label:"Nature journals",base:"nature",source:"built-in",abstractLimit:200,lastUsed:null},
-      {id:"st_elsevier",label:"Elsevier — Applied Surface Science",base:"elsevier",source:"built-in",abstractLimit:250,lastUsed:null},
+      {id:"st_elsevier",label:"Elsevier journals",base:"elsevier",source:"built-in",abstractLimit:250,lastUsed:null},
       {id:"st_aps",label:"Physical Review B",base:"aps",source:"built-in",abstractLimit:600,lastUsed:null},
       {id:"st_springer",label:"Springer journals",base:"springer",source:"built-in",abstractLimit:250,lastUsed:null},
       {id:"st_ieee",label:"IEEE",base:"ieee",source:"built-in",abstractLimit:250,lastUsed:null},
       {id:"st_vancouver",label:"Vancouver",base:"vancouver",source:"built-in",abstractLimit:250,lastUsed:null},
-      {id:"st_harvard",label:"Harvard (UK reports)",base:"harvard",source:"built-in",abstractLimit:300,lastUsed:null}
+      {id:"st_harvard",label:"Harvard",base:"harvard",source:"built-in",abstractLimit:300,lastUsed:null}
     ],
-    authors:refs[0].authors.map((a,i)=>({id:uid("au"),name:a,orgs:i===0?["o_uni"]:[],
-      corresponding:i===0, equal:false, credit:i===0?["Conceptualization","Writing – original draft"]:[]})),
-    orgs:[{id:"o_uni",name:"Example University",dept:"Department of Chemistry",city:"London",country:"UK",ror:""},
-          {id:"o_fac",name:"Example Facility",dept:"Surface Analysis Centre",city:"Didcot",country:"UK",ror:""}],
-    funding:"Funder grant code goes here.",
-    keywords:refs[0].keywords.slice(),
+    authors:[
+      {id:uid("au"),first:"Jane",initials:"",last:"Doe",name:"Jane Doe",orgs:["o_uni"],
+       corresponding:true, equal:false, credit:["Conceptualization","Writing - original draft"]},
+      {id:uid("au"),first:"Richard",initials:"",last:"Roe",name:"Richard Roe",orgs:["o_uni"],
+       corresponding:false, equal:false, credit:[]},
+      {id:uid("au"),first:"A.",initials:"N.",last:"Other",name:"A. N. Other",orgs:["o_fac"],
+       corresponding:false, equal:false, credit:[]}
+    ],
+    orgs:[{id:"o_uni",name:"Example University",dept:"Department of Chemistry",city:"London",postcode:"",country:"United Kingdom",ror:""},
+          {id:"o_fac",name:"Example Research Facility",dept:"Analysis Group",city:"Didcot",postcode:"",country:"United Kingdom",ror:""}],
+    funding:"Funder and grant number go here.",
+    keywords:["example","surface composition","placeholder"],
     edition:"desktop",
-    me:{name:"Mark Isaacs",initials:"MI",colour:"#175FFF"},
+    me:{name:"",initials:"",colour:"#175FFF"},
     sampleProps:[
-      {id:"pd_ti",label:"Ti loading",unit:"wt%",type:"number"},
-      {id:"pd_sa",label:"BET surface area",unit:"m\u00b2 g\u207b\u00b9",type:"number"},
-      {id:"pd_cov",label:"Ti coverage",unit:"ML",type:"number"},
-      {id:"pd_pore",label:"Pore diameter",unit:"nm",type:"number"},
+      {id:"pd_temp",label:"Treatment temperature",unit:"°C",type:"number"},
+      {id:"pd_load",label:"Loading",unit:"wt%",type:"number"},
+      {id:"pd_area",label:"Surface area",unit:"m² g⁻¹",type:"number"},
+      {id:"pd_size",label:"Particle size",unit:"nm",type:"number"},
       {id:"pd_meth",label:"Preparation",unit:"",type:"text"}
     ],
     samples:[
-      {id:"sm_par",code:"SBA-15",name:"parent silica",notes:"Calcined 550 \u00b0C, 6 h.",
-       props:{pd_sa:"812",pd_pore:"6.4",pd_meth:"hydrothermal, P123 template"}},
-      {id:"sm_03",code:"TSB-03",name:"0.3 ML Ti-SBA-15",notes:"",
-       props:{pd_ti:"2.1",pd_sa:"764",pd_cov:"0.3",pd_pore:"6.1",pd_meth:"alkoxide grafting"}},
-      {id:"sm_07",code:"TSB-07",name:"0.7 ML Ti-SBA-15",notes:"Highest F2Cp yield in the series.",
-       props:{pd_ti:"4.8",pd_sa:"731",pd_cov:"0.7",pd_pore:"5.9",pd_meth:"alkoxide grafting"}},
-      {id:"sm_14",code:"TSB-14",name:"1.4 ML Ti-SBA-15",notes:"Three-dimensional titania islands evident.",
-       props:{pd_ti:"9.6",pd_sa:"688",pd_cov:"1.4",pd_pore:"5.6",pd_meth:"alkoxide grafting"}}
+      {id:"sm_ref",code:"REF",name:"untreated reference",notes:"As received; no treatment.",
+       props:{pd_area:"812",pd_size:"6.4",pd_meth:"as received"}},
+      {id:"sm_a",code:"SAMPLE-A",name:"treated at 300 °C",notes:"",
+       props:{pd_temp:"300",pd_load:"2.1",pd_area:"764",pd_size:"6.1",pd_meth:"method 1"}},
+      {id:"sm_b",code:"SAMPLE-B",name:"treated at 600 °C",notes:"Largest response in the series.",
+       props:{pd_temp:"600",pd_load:"4.8",pd_area:"731",pd_size:"5.9",pd_meth:"method 1"}},
+      {id:"sm_c",code:"SAMPLE-C",name:"treated at 900 °C",notes:"",
+       props:{pd_temp:"900",pd_load:"9.6",pd_area:"688",pd_size:"5.6",pd_meth:"method 1"}}
     ],
     defs:[
-      {id:"df_xps",short:"XPS",long:"X-ray photoelectron spectroscopy"},
-      {id:"df_ups",short:"UPS",long:"ultraviolet photoelectron spectroscopy"},
-      {id:"df_reels",short:"REELS",long:"reflection electron energy loss spectroscopy"},
-      {id:"df_iss",short:"ISS",long:"ion scattering spectroscopy"},
-      {id:"df_saf",short:"SAF",long:"sustainable aviation fuel"},
-      {id:"df_fal",short:"FAL",long:"furfural"},
-      {id:"df_cpo",short:"CPO",long:"cyclopentanone"},
-      {id:"df_ml",short:"ML",long:"monolayer equivalent"}
+      {id:"df_a",short:"EXA",long:"example analysis"},
+      {id:"df_b",short:"EXB",long:"example measurement B"},
+      {id:"df_c",short:"SEM",long:"scanning electron microscopy"},
+      {id:"df_d",short:"XRD",long:"X-ray diffraction"},
+      {id:"df_e",short:"RT",long:"room temperature"}
     ],
     glossary:false, redefineInSI:true, templateId:"tpl_wiley_afm",
     tables:[{id:uid("tbl"),ref:"T1",kind:"samples",
-      caption:"Textural and compositional properties of the Ti-SBA-15 series.",
-      sampleIds:["sm_par","sm_03","sm_07","sm_14"], cols:["pd_ti","pd_cov","pd_sa","pd_pore"],
+      caption:"Properties of the samples in the series.",
+      sampleIds:["sm_ref","sm_a","sm_b","sm_c"], cols:["pd_temp","pd_load","pd_area","pd_size"],
       grid:null}],
     attachments:[
-      {id:uid("at"),name:"TSB-series_Ti2p_VAMAS.vms",bytes:2411008,type:"chemical/x-vamas",target:"F1",addedAt:nowISO(),note:"Ti 2p regions, charge corrected, Casa fits retained"},
-      {id:uid("at"),name:"TSB-series_survey_quant.csv",bytes:18432,type:"text/csv",target:"F1",addedAt:nowISO(),note:"Survey quantification behind panel (b)"},
-      {id:uid("at"),name:"BET_isotherms_TSB.xlsx",bytes:96256,type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",target:"T1",addedAt:nowISO(),note:"Nitrogen physisorption isotherms and BET fits"}
+      {id:uid("at"),name:"example_measurements.csv",bytes:18432,type:"text/csv",target:"F1",addedAt:nowISO(),note:"The numbers behind Figure 1"},
+      {id:uid("at"),name:"example_properties.xlsx",bytes:96256,type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",target:"T1",addedAt:nowISO(),note:"The measurements behind Table 1"}
     ],
     plots:[p1,p2,p3], images:[], figures:[fig1], refs,
-    folders:["Unfiled","Ti-SBA-15","XPS method","SAF background"],
+    folders:["Unfiled","Example references"],
     subdocs:{
       manuscript:{ sections:[
         {id:uid("s"),kind:"heading",title:"Introduction",blocks:[
-          {id:uid("b"),type:"p",text:"Around 2.5% of global carbon emissions arise from air travel, and the routes to [@abbr:df_saf] from second-generation lignocellulosic biomass remain limited by the selectivity of the C–C coupling step.[@ref:R2] Titania dispersed on high surface area silica offers a tractable photocatalyst, but the speciation of titanium at sub-monolayer coverage is not well resolved.[@ref:R3]"},
-          {id:uid("b"),type:"p",text:"Here we resolve that speciation directly. [@fig:F1] shows the Ti 2p response across the coverage series alongside the survey quantification, and establishes the transition from isolated Ti atoms to interconnected Ti–O–Ti networks."}]},
+          {id:uid("b"),type:"p",text:"This paragraph is here so the view has something in it. Anything you reuse - a sample, an acronym such as [@abbr:df_a], a figure, a table, an equation or a citation[@ref:R2] - is put in by reference rather than typed, so renaming it later rewrites every mention at once."},
+          {id:uid("b"),type:"p",text:"[@fig:F1] is referred to the same way, and takes its number from where it sits in the document rather than from anything typed here. Delete these paragraphs and start writing."}]},
         {id:uid("s"),kind:"heading",title:"Results and discussion",blocks:[
-          {id:uid("b"),type:"p",text:"[@abbr:df_xps] of [@sample:sm_03] through [@sample:sm_14] shows the Ti 2p3/2 binding energy shifting by 0.4 eV, consistent with increasing next-nearest-neighbour Ti coordination. Auger parameter analysis over the same series gives the same ordering.[@ref:R4] Textural data for every sample are in [@tbl:T1]."},
+          {id:uid("b"),type:"p",text:"[@abbr:df_a] of [@sample:sm_a] through [@sample:sm_c] shows the measured signal changing with treatment temperature.[@ref:R3] The properties of every sample are in [@tbl:T1]."},
           {id:uid("b"),type:"fig",figRef:"F1"},
           {id:uid("b"),type:"tbl",tblRef:"T1"},
-          {id:uid("b"),type:"p",text:"Photocatalytic performance tracks the speciation rather than the loading: [@sample:sm_07] gives the highest yield of F2Cp from [@abbr:df_fal] and [@abbr:df_cpo], and activity falls away by [@sample:sm_14] once three-dimensional titania islands form."},
-          {id:uid("b"),type:"eq",label:"E1",numbered:true,latex:"\\theta_{\\mathrm{Ti}} = \\frac{I_{\\mathrm{Ti}\\,2p}/S_{\\mathrm{Ti}\\,2p}}{I_{\\mathrm{Ti}\\,2p}/S_{\\mathrm{Ti}\\,2p} + I_{\\mathrm{Si}\\,2p}/S_{\\mathrm{Si}\\,2p}}"},
-          {id:uid("b"),type:"p",text:"where $S_x$ are the sensitivity factors for the transmission function of the instrument. Coverage from [@eq:E1] agrees with the ISS estimate to within 0.05 ML."}]},
+          {id:uid("b"),type:"p",text:"The response peaks for [@sample:sm_b] and falls away by [@sample:sm_c]. Two or three cross-references collapse on their own: pick several figures at once and they print as a range."},
+          {id:uid("b"),type:"eq",label:"E1",numbered:true,latex:"\\\\theta = \\\\frac{I_{A}/S_{A}}{I_{A}/S_{A} + I_{B}/S_{B}}"},
+          {id:uid("b"),type:"p",text:"where $S_x$ are the sensitivity factors for the measurement. The value from [@eq:E1] is quoted throughout."}]},
         {id:uid("s"),kind:"experimental",role:"experimental",placement:"end",title:"Experimental",blocks:[
-          {id:uid("b"),type:"p",text:"[@sample:sm_par] was prepared hydrothermally with P123 as the structure-directing agent and calcined at 550 \u00b0C. Ti-SBA-15 samples were prepared by alkoxide grafting of titanium(IV) isopropoxide in anhydrous toluene under nitrogen, with the titanium loading controlled by the alkoxide:silanol ratio."},
-          {id:uid("b"),type:"gen",gen:"experimental",text:"[generated from synthesis records — placeholder until the Workbench store is wired in]"}]},
+          {id:uid("b"),type:"p",text:"[@sample:sm_ref] was used as received. The remaining samples were prepared by the same method and treated at the temperatures given in [@tbl:T1]."}]},
         {id:uid("s"),kind:"acknowledgements",title:"Acknowledgements",blocks:[
-          {id:uid("b"),type:"p",text:"The authors thank the Example Facility for access to the instrument, supported by Funder grant XX/000000/1."}]}
+          {id:uid("b"),type:"p",text:"Acknowledgements go here."}]}
       ]},
       si:{ sections:[{id:uid("s"),kind:"heading",title:"Supporting figures",blocks:[
-        {id:uid("b"),type:"p",text:"Figure S1 gives the [@abbr:df_iss] response used to confirm that titania in [@sample:sm_07] remains dispersed rather than forming islands at coverages below one [@abbr:df_ml].[@ref:R3]"}]}]},
+        {id:uid("b"),type:"p",text:"Figures numbered in this sub-document carry an S, so a figure placed here becomes Figure S1 without anything being typed."}]}]},
       cover:{ sections:[{id:uid("s"),kind:"heading",title:"Cover letter",blocks:[
-        {id:uid("b"),type:"p",text:"Dear Editor,\n\nWe submit for consideration in Advanced Functional Materials our manuscript describing the first solvent-free photocatalytic route to a jet fuel precursor over sub-monolayer Ti-SBA-15."}]}]},
+        {id:uid("b"),type:"p",text:"Dear Editor,\\n\\nWe submit for your consideration the manuscript above. This is the example cover letter; replace it with your own."}]}]},
       dmp:{ sections:[{id:uid("s"),kind:"heading",title:"Data availability",blocks:[
-        {id:uid("b"),type:"p",text:"Raw and processed XPS data (VAMAS), photocatalysis chromatograms and the plot specifications behind every figure are deposited at [DOI to be minted on acceptance]. Spectra were acquired at the Example Facility."}]}]}
+        {id:uid("b"),type:"p",text:"Say here where the data behind this work will be deposited. The Deposit panel above gathers the figures, tables, plot data and attached files into one folder ready to upload."}]}]}
     },
-    revisions:[{id:uid("rev"),at:new Date(Date.now()-86400000*6).toISOString(),label:"First full draft",by:"Mark Isaacs",snapshot:null,comments:[]}],
+    revisions:[{id:uid("rev"),at:new Date(Date.now()-86400000*6).toISOString(),label:"First draft",by:"",snapshot:null,comments:[]}],
     reviews:[],
     ensImport:ENS_SAMPLE,
     createdAt:now
   };
 }
-
 /* ---------- persistence ---------- */
 const LSK="gerbildocs-v1", LSK_OLD="hxps-docdesk-v1";
 /* A standalone document saved under the old product name is picked up once. */
@@ -1614,6 +1695,339 @@ function bibliography(){
   const nums=citedOrder(), keys=Object.keys(nums).filter(k=>nums[k]>0).sort((a,b)=>nums[a]-nums[b]);
   const km=refKeyMap();
   return keys.map(k=>({key:k,n:nums[k],ref:km[k]})).filter(x=>x.ref);
+}
+</script>
+<script>
+/* ============================ LANGUAGE, SPELLING VARIANTS, SYNONYMS ============================
+   Three separate things the person asked for, and they are worth keeping apart.
+
+   1. The document's language. The browser's own spell-checker is the one doing
+      the underlining, and it picks its dictionary from the nearest `lang`
+      attribute — so the only way to get British spelling underlined as British
+      is to say so on the elements being typed into. The same attribute drives
+      CSS hyphenation, which is why a French document stops hyphenating like an
+      English one.
+
+   2. British/American variants. No dictionary catches these: "color" and
+      "colour" are both real words, and only the document's language makes one
+      of them wrong. This is an explicit word list — no -ize/-ise rule, because
+      the rule has too many exceptions (seize, size, capsize, analyse) and a
+      wrong correction is worse than none.
+
+   3. Synonyms. A small thesaurus of the words that actually repeat in
+      scientific prose. It does not pretend to be a general one, and says so. */
+const LANGS=[
+  {k:"en-GB",l:"English (United Kingdom)"},{k:"en-US",l:"English (United States)"},
+  {k:"en-AU",l:"English (Australia)"},{k:"en-CA",l:"English (Canada)"},
+  {k:"en-IE",l:"English (Ireland)"},{k:"en-IN",l:"English (India)"},
+  {k:"fr-FR",l:"French"},{k:"de-DE",l:"German"},{k:"es-ES",l:"Spanish"},
+  {k:"it-IT",l:"Italian"},{k:"nl-NL",l:"Dutch"},{k:"pt-BR",l:"Portuguese (Brazil)"},
+  {k:"pl-PL",l:"Polish"},{k:"sv-SE",l:"Swedish"},{k:"da-DK",l:"Danish"},
+  {k:"nb-NO",l:"Norwegian"},{k:"fi-FI",l:"Finnish"},{k:"cs-CZ",l:"Czech"}
+];
+function docLang(){ return (S&&S.lang)||"en-GB"; }
+function langLabel(k){ const e=LANGS.find(x=>x.k===k); return e?e.l:k; }
+/* Which side of the Atlantic the document is written on; null for anything
+   that is not English, where the variant check has nothing to say. */
+function langVariant(){ const l=docLang();
+  if(!/^en/.test(l)) return null;
+  return (l==="en-US")?"us":"gb";          /* Canadian usage is mixed; treat it as British for -our/-re */
+}
+/* British -> American. Read in reverse for an American document. Endings that
+   are regular across a family (-isation/-ization, -ised/-ized) are expanded
+   from the stem rather than listed, so the table stays readable. */
+const UKUS_STEMS=["organis","characteris","optimis","normalis","minimis","maximis","polaris","ionis",
+  "oxidis","crystallis","stabilis","recognis","emphasis","summaris","utilis","analys","catalys",
+  "hydrolys","electrolys","visualis","realis","standardis","sterilis","pressuris","vaporis","atomis",
+  "immobilis","functionalis","modernis","generalis","specialis","synthesis","metabolis","neutralis"];
+const UKUS_ENDINGS=["e","es","ed","ing","ation","ations","er","ers","able"];
+const UKUS_PAIRS=[
+  ["colour","color"],["colours","colors"],["coloured","colored"],["colouring","coloring"],["colourless","colorless"],
+  ["behaviour","behavior"],["behaviours","behaviors"],["behavioural","behavioral"],
+  ["favour","favor"],["favourable","favorable"],["favoured","favored"],
+  ["labour","labor"],["vapour","vapor"],["vapours","vapors"],["odour","odor"],["odours","odors"],
+  ["neighbour","neighbor"],["neighbouring","neighboring"],["harbour","harbor"],["rumour","rumor"],
+  ["centre","center"],["centres","centers"],["centred","centered"],["centring","centering"],
+  ["fibre","fiber"],["fibres","fibers"],["litre","liter"],["litres","liters"],
+  ["metre","meter"],["metres","meters"],["millimetre","millimeter"],["millimetres","millimeters"],
+  ["micrometre","micrometer"],["micrometres","micrometers"],["nanometre","nanometer"],["nanometres","nanometers"],
+  ["centimetre","centimeter"],["centimetres","centimeters"],["kilometre","kilometer"],["kilometres","kilometers"],
+  ["theatre","theater"],["calibre","caliber"],["sombre","somber"],["lustre","luster"],
+  ["defence","defense"],["offence","offense"],["licence","license"],["practise","practice"],
+  ["programme","program"],["programmes","programs"],
+  ["ageing","aging"],["judgement","judgment"],["acknowledgement","acknowledgment"],["acknowledgements","acknowledgments"],
+  ["fulfil","fulfill"],["fulfilment","fulfillment"],["instalment","installment"],["skilful","skillful"],
+  ["enrol","enroll"],["enrolment","enrollment"],["distil","distill"],["distilled","distilled"],
+  ["modelling","modeling"],["modelled","modeled"],["labelling","labeling"],["labelled","labeled"],
+  ["levelling","leveling"],["levelled","leveled"],["signalling","signaling"],["signalled","signaled"],
+  ["travelling","traveling"],["travelled","traveled"],["cancelling","canceling"],["cancelled","canceled"],
+  ["fuelled","fueled"],["fuelling","fueling"],["channelled","channeled"],
+  ["aluminium","aluminum"],["sulphur","sulfur"],["sulphate","sulfate"],["sulphates","sulfates"],
+  ["sulphide","sulfide"],["sulphides","sulfides"],["sulphuric","sulfuric"],["sulphonate","sulfonate"],
+  ["caesium","cesium"],["oestrogen","estrogen"],["haemoglobin","hemoglobin"],["haematite","hematite"],
+  ["anaemia","anemia"],["oedema","edema"],["foetal","fetal"],["diarrhoea","diarrhea"],
+  ["ploughed","plowed"],["mould","mold"],["moulds","molds"],["moulding","molding"],["smoulder","smolder"],
+  ["grey","gray"],["greyscale","grayscale"],["tyre","tire"],["kerb","curb"],["storey","story"],
+  ["aeroplane","airplane"],["artefact","artifact"],["artefacts","artifacts"],
+  ["draught","draft"],["sceptical","skeptical"],["sceptic","skeptic"],
+  ["speciality","specialty"],["specialities","specialties"],["aluminised","aluminized"],
+  ["towards","toward"],["amongst","among"],["whilst","while"],["learnt","learned"],["spelt","spelled"]
+];
+/* Built once: every British form to its American form, and back. */
+let _ukus=null;
+function ukusMaps(){
+  if(_ukus) return _ukus;
+  const gb2us=new Map(), us2gb=new Map();
+  const add=(gb,us)=>{ if(gb===us) return;
+    if(!gb2us.has(gb)) gb2us.set(gb,us);
+    if(!us2gb.has(us)) us2gb.set(us,gb); };
+  UKUS_PAIRS.forEach(([gb,us])=>add(gb,us));
+  UKUS_STEMS.forEach(st=>UKUS_ENDINGS.forEach(end=>{
+    const gb=st+end;
+    if(end==="ation"||end==="ations") add(gb, st.replace(/s$/,"z")+end);
+    else add(gb, st.replace(/s$/,"z")+end);
+  }));
+  _ukus={gb2us,us2gb};
+  return _ukus;
+}
+/* The correction this document's language wants for a word, or null. Case is
+   preserved: "Colour" comes back as "Color". */
+function variantFor(word){
+  const v=langVariant(); if(!v) return null;
+  const w=String(word||""); const lower=w.toLowerCase();
+  if(!/^[a-z]+$/.test(lower)) return null;
+  const {gb2us,us2gb}=ukusMaps();
+  const want = v==="us" ? gb2us.get(lower) : us2gb.get(lower);
+  if(!want||want===lower) return null;
+  if(w===lower) return want;
+  if(w===w.toUpperCase()) return want.toUpperCase();
+  if(w[0]===w[0].toUpperCase()) return want[0].toUpperCase()+want.slice(1);
+  return want;
+}
+/* A short thesaurus for the words scientific prose wears out. Deliberately
+   small and deliberately not general: a full one belongs in a dictionary, not
+   in a document editor. */
+const THESAURUS={
+  show:["demonstrate","reveal","indicate","establish","illustrate"],
+  shows:["demonstrates","reveals","indicates","establishes","illustrates"],
+  shown:["demonstrated","revealed","indicated","established"],
+  showed:["demonstrated","revealed","indicated"],
+  demonstrate:["show","establish","confirm","prove"],
+  indicate:["suggest","show","imply","point to"],
+  suggest:["indicate","imply","propose","point to"],
+  observe:["see","note","detect","record"],
+  observed:["seen","noted","detected","recorded","measured"],
+  measure:["quantify","determine","record","gauge"],
+  measured:["quantified","determined","recorded"],
+  determine:["establish","measure","ascertain","identify"],
+  obtain:["acquire","collect","achieve","yield"],
+  obtained:["acquired","collected","achieved","recorded"],
+  use:["employ","apply","utilise","adopt"],
+  used:["employed","applied","adopted"],
+  using:["employing","applying","by means of","with"],
+  perform:["carry out","conduct","undertake"],
+  performed:["carried out","conducted","undertaken"],
+  conduct:["carry out","perform","undertake"],
+  investigate:["examine","study","explore","probe"],
+  examine:["investigate","inspect","study","analyse"],
+  analyse:["examine","assess","evaluate","interrogate"],
+  study:["investigation","examination","survey","work"],
+  important:["significant","substantial","notable","central","key"],
+  significant:["substantial","marked","appreciable","notable"],
+  large:["substantial","considerable","extensive","sizeable"],
+  small:["slight","modest","limited","minor"],
+  increase:["rise","growth","gain","enhancement"],
+  increases:["rises","grows","climbs"],
+  increased:["rose","grew","higher","enhanced"],
+  decrease:["fall","reduction","decline","drop"],
+  decreased:["fell","declined","dropped","lower"],
+  change:["shift","variation","alteration","difference"],
+  changes:["shifts","variations","alterations"],
+  different:["distinct","dissimilar","contrasting","separate"],
+  similar:["comparable","analogous","alike","equivalent"],
+  same:["identical","equivalent","unchanged"],
+  good:["strong","sound","reliable","effective"],
+  poor:["weak","limited","unreliable","inadequate"],
+  clear:["evident","apparent","unambiguous","plain"],
+  clearly:["evidently","plainly","unambiguously"],
+  likely:["probable","plausible","expected"],
+  possible:["feasible","plausible","conceivable"],
+  because:["since","as","given that","owing to"],
+  therefore:["hence","thus","consequently","accordingly"],
+  however:["nevertheless","nonetheless","yet","by contrast"],
+  also:["in addition","furthermore","moreover","as well"],
+  further:["additional","additionally","moreover"],
+  about:["approximately","around","roughly","of the order of"],
+  approximately:["about","roughly","around","close to"],
+  many:["numerous","a number of","several"],
+  several:["a number of","various","multiple"],
+  various:["several","a range of","differing"],
+  few:["limited","a handful of","scarce"],
+  method:["approach","procedure","technique","protocol"],
+  approach:["method","strategy","route","technique"],
+  result:["outcome","finding","consequence"],
+  results:["findings","outcomes","data"],
+  finding:["result","observation","outcome"],
+  data:["measurements","results","observations"],
+  sample:["specimen","material"],
+  samples:["specimens","materials"],
+  make:["produce","prepare","generate","form"],
+  made:["produced","prepared","generated","formed"],
+  prepare:["synthesise","produce","make","formulate"],
+  prepared:["synthesised","produced","formulated"],
+  give:["yield","produce","afford","provide"],
+  gives:["yields","produces","affords","provides"],
+  cause:["produce","give rise to","lead to","induce"],
+  caused:["produced","induced","brought about"],
+  affect:["influence","alter","modify","act on"],
+  effect:["influence","impact","consequence"],
+  improve:["enhance","strengthen","refine","raise"],
+  improved:["enhanced","strengthened","refined"],
+  reduce:["lower","diminish","lessen","cut"],
+  reduced:["lowered","diminished","lessened"],
+  need:["require","call for","demand"],
+  needed:["required","necessary"],
+  help:["assist","aid","support","facilitate"],
+  allow:["permit","enable","let"],
+  allows:["permits","enables"],
+  find:["identify","locate","establish","discover"],
+  found:["identified","located","established","observed"],
+  report:["describe","present","document","record"],
+  present:["report","describe","set out","outline"],
+  describe:["set out","outline","report","characterise"],
+  confirm:["verify","corroborate","substantiate","bear out"],
+  support:["corroborate","reinforce","back","substantiate"],
+  agree:["accord","correspond","be consistent"],
+  consistent:["in agreement","compatible","in keeping"],
+  due:["owing","attributable","arising from"],
+  overall:["in total","taken together","on the whole"],
+  finally:["lastly","in closing","to conclude"],
+  briefly:["in short","in summary","concisely"]
+};
+function synonymsFor(word){
+  const w=String(word||"").toLowerCase();
+  const list=THESAURUS[w];
+  if(!list) return [];
+  const cap = word && word[0]===word[0].toUpperCase() && word!==word.toUpperCase();
+  return list.map(x=>cap? x[0].toUpperCase()+x.slice(1) : x);
+}
+/* Put the document's language where the browser's spell-checker will see it.
+   Called after every render; cheap, and it has to run again each time because
+   the work area is rebuilt from scratch. */
+function applyLang(){
+  const l=docLang();
+  $$("#work textarea, #work [data-sectitle], #work .ms, #pvPages .ms, #fmTitle").forEach(el=>{
+    if(el.getAttribute("spellcheck")==="false") { el.removeAttribute("lang"); return; }
+    el.setAttribute("lang",l);
+  });
+}
+/* ---------- the word under the caret, and replacing it ---------- */
+function wordAt(ta){
+  const v=ta.value, pos=ta.selectionStart??0;
+  let a=pos, b=pos;
+  const isw=c=>/[A-Za-zÀ-ɏ'’-]/.test(c||"");
+  while(a>0&&isw(v[a-1])) a--;
+  while(b<v.length&&isw(v[b])) b++;
+  const word=v.slice(a,b).replace(/^[-'’]+|[-'’]+$/g,"");
+  if(!word) return null;
+  const at=v.indexOf(word,a);
+  return {word, a:at<0?a:at, b:(at<0?a:at)+word.length};
+}
+function replaceRange(ta,a,b,text){
+  ta.value=ta.value.slice(0,a)+text+ta.value.slice(b);
+  ta.dispatchEvent(new Event("input",{bubbles:true}));
+  ta.focus(); ta.setSelectionRange(a+text.length,a+text.length);
+}
+/* ---------- the right-click menu ---------- */
+function closeCtx(){ const h=$("#ctxHost"); if(h) h.innerHTML=""; }
+function openCtx(ta,x,y){
+  const host=$("#ctxHost"); if(!host) return;
+  const w=wordAt(ta);
+  const fix=w?variantFor(w.word):null;
+  const syn=w?synonymsFor(w.word):[];
+  const rows=[];
+  if(fix) rows.push({t:`Use <b>${esc(fix)}</b> <span class="ctxnote">${esc(langLabel(docLang()))}</span>`,
+                     run:()=>replaceRange(ta,w.a,w.b,fix)});
+  if(syn.length){
+    rows.push({sep:true,t:`Instead of “${esc(w.word)}”`});
+    syn.forEach(x=>rows.push({t:esc(x),run:()=>replaceRange(ta,w.a,w.b,x)}));
+  }
+  if(!fix&&!syn.length) rows.push({t:w?`No suggestion for “${esc(w.word)}”`:"No word under the pointer",dim:true});
+  rows.push({sep:true,t:"Insert"});
+  rows.push({t:"References…  <span class=\"ctxnote\">pick several</span>",run:()=>openRefPicker(ta)});
+  rows.push({t:"One reference  <span class=\"ctxnote\">@</span>",run:()=>acOpenFromButton(ta)});
+  if(typeof openProseSymbols==="function") rows.push({t:"Symbol…",run:()=>openProseSymbols(ta)});
+  host.innerHTML=`<div class="ctxmenu" id="ctxMenu" role="menu">${rows.map((r,i)=>r.sep
+    ? `<div class="ctxsep" role="presentation">${r.t}</div>`
+    : `<button type="button" class="ctxitem${r.dim?" dim":""}" role="menuitem" data-ci="${i}"${r.dim?" disabled":""}>${r.t}</button>`).join("")}
+    <div class="ctxfoot">Shift + right-click for your system's spelling menu</div></div>`;
+  const el=$("#ctxMenu");
+  const mw=el.offsetWidth, mh=el.offsetHeight;
+  el.style.left=Math.min(x,window.innerWidth-mw-10)+window.scrollX+"px";
+  el.style.top=(y+mh>window.innerHeight-10 ? Math.max(8,y-mh) : y)+window.scrollY+"px";
+  $$("#ctxMenu [data-ci]").forEach(b=>b.onclick=()=>{ const r=rows[+b.dataset.ci]; closeCtx(); if(r&&r.run) r.run(); });
+}
+function wireContextMenu(){
+  document.addEventListener("contextmenu",e=>{
+    const ta=e.target.closest&&e.target.closest("textarea.inp");
+    /* Shift is the escape hatch to the browser's own menu, which is where the
+       real spelling suggestions live — we cannot read them from a page. */
+    if(!ta||e.shiftKey||ta.getAttribute("spellcheck")==="false"){ closeCtx(); return; }
+    e.preventDefault();
+    const pos=ta.selectionStart;
+    openCtx(ta,e.clientX,e.clientY);
+    ta.setSelectionRange(pos,pos);
+  });
+  document.addEventListener("mousedown",e=>{ if(!e.target.closest||!e.target.closest("#ctxMenu")) closeCtx(); });
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeCtx(); });
+}
+/* ---------- the document-wide variant check ---------- */
+function variantScan(){
+  const out=[];
+  if(!langVariant()) return out;
+  const look=(text,where,set)=>{
+    String(text||"").replace(/[A-Za-z][A-Za-z'’-]*/g,(w,i)=>{
+      const fix=variantFor(w);
+      if(fix) out.push({word:w,fix,where,set,at:i});
+      return w; });
+  };
+  Object.keys(S.subdocs||{}).forEach(k=>(S.subdocs[k].sections||[]).forEach(sec=>(sec.blocks||[]).forEach(b=>{
+    if(b.type==="p"||b.type==="gen") look(b.text,`${k} · ${sec.title}`,b);
+  })));
+  look(S.title,"Title",null); look(S.abstract,"Abstract",null);
+  (S.figures||[]).forEach(f=>look(f.leadIn,"Figure caption",f));
+  (S.tables||[]).forEach(t=>look(t.caption,"Table caption",t));
+  return out;
+}
+function openVariantReview(){
+  const hits=variantScan();
+  const want=langVariant()==="us"?"American":"British";
+  if(!hits.length){ toast(`Nothing to change — the spelling is already ${want} throughout.`); return; }
+  const byWord={};
+  hits.forEach(h=>{ (byWord[h.word]=byWord[h.word]||{fix:h.fix,n:0,where:new Set()}); byWord[h.word].n++; byWord[h.word].where.add(h.where); });
+  const keys=Object.keys(byWord).sort((a,b)=>byWord[b].n-byWord[a].n);
+  modal(`Spelling variants — ${esc(langLabel(docLang()))}`,
+    `<div class="stack">
+      <div class="note">${hits.length} word${hits.length>1?"s":""} in this document ${hits.length>1?"are":"is"} not ${esc(want)} spelling. Changing them rewrites the text in place; everything else is left alone.</div>
+      <ul class="lst">${keys.map(w=>`<li><div class="grow">
+        <div class="ttl"><span class="mono">${esc(w)}</span> → <span class="mono"><b>${esc(byWord[w].fix)}</b></span></div>
+        <div class="meta">${byWord[w].n} occurrence${byWord[w].n>1?"s":""} · ${esc([...byWord[w].where].slice(0,3).join("; "))}${byWord[w].where.size>3?" …":""}</div>
+      </div><div class="acts"><label class="chip"><input type="checkbox" data-vchk="${esc(w)}" checked> change</label></div></li>`).join("")}</ul>
+    </div>`,
+    `<button class="btn" data-close>Cancel</button><button class="btn p" id="vApply">Change the ticked words</button>`);
+  $("#vApply").onclick=()=>{
+    const want=new Set($$("[data-vchk]").filter(c=>c.checked).map(c=>c.dataset.vchk));
+    if(!want.size){ closeModal(); return; }
+    let n=0;
+    const fixText=t=>String(t||"").replace(/[A-Za-z][A-Za-z'’-]*/g,w=>{
+      if(!want.has(w)) return w; const f=variantFor(w); if(!f) return w; n++; return f; });
+    Object.keys(S.subdocs||{}).forEach(k=>(S.subdocs[k].sections||[]).forEach(sec=>(sec.blocks||[]).forEach(b=>{
+      if(b.type==="p"||b.type==="gen") b.text=fixText(b.text); })));
+    S.title=fixText(S.title); S.abstract=fixText(S.abstract);
+    (S.figures||[]).forEach(f=>f.leadIn=fixText(f.leadIn));
+    (S.tables||[]).forEach(t=>t.caption=fixText(t.caption));
+    closeModal(); commit(`${n} spelling${n>1?"s":""} changed to ${langLabel(docLang())}`,{undo:true});
+  };
 }
 </script>
 <script>
@@ -1873,7 +2287,7 @@ function render(){
     let h=""; if(v.g!==g){ g=v.g; h=`<div class="grp">${esc(g)}</div>`; }
     return h+`<button class="navi" data-view="${v.k}"${v.k===view?' aria-current="page"':""}>${esc(v.l)}<span class="ct">${v.ct()}</span></button>`;}).join("");
   $("#work").innerHTML=({write:vWrite,people:vPeople,samples:vSamples,defs:vDefs,figures:vFigures,plots:vPlots,tables:vTables,equations:vEquations,refs:vRefs,styles:vStyles,templates:vTemplates,format:vFormat,project:vProject,drafts:vDrafts,reviews:vReviews,files:vFiles}[view])();
-  wire(); wireFormat(); wireProject(); wireDeposit(); a11yLabels($("#work"));
+  wire(); wireFormat(); wireProject(); wireDeposit(); a11yLabels($("#work")); applyLang();
 }
 /* Fields are written as <div class="fld"><label>…</label><input …></div> with no
    `for`. Give every such control its label's name, and mark selected list rows
@@ -1893,9 +2307,19 @@ function renderInline(text,ctx){
   const maths=[];
   let out=String(text??"").replace(/\$([^$\n]+)\$/g,(m,tex)=>{ maths.push(tex); return "\u0001"+(maths.length-1)+"\u0001"; });
   out=fmtInline(esc(out));
-  out=out.replace(/\[@fig:([A-Za-z0-9_]+)\]/g,(m,r)=> fn[r]? `<span class="xref">${esc(capLabel("fig",fn[r],true))}</span>` : `<span class="unres">?fig:${esc(r)}</span>`);
-  out=out.replace(/\[@tbl:([A-Za-z0-9]+)\]/g,(m,r)=> tn[r]? `<span class="xref">${esc(capLabel("tbl",tn[r],true))}</span>` : `<span class="unres">?tbl:${esc(r)}</span>`);
-  out=out.replace(/\[@eq:([A-Za-z0-9]+)\]/g,(m,r)=> en[r]? `<span class="xref">Equation ${en[r]}</span>` : `<span class="unres">?eq:${esc(r)}</span>`);
+  /* A token may name several: "[@fig:F1,F2,F3]" prints as one cross-reference.
+     Anything that no longer exists is still shown, marked, rather than
+     quietly dropped — a vanished figure should be visible, not invisible. */
+  const xref=(kind,map)=>(m,g)=>{
+    const keys=String(g).split(",").map(x=>x.trim()).filter(Boolean);
+    const got=keys.filter(k=>map[k]), lost=keys.filter(k=>!map[k]);
+    const body=got.length?`<span class="xref">${esc(xrefLabel(kind,got.map(k=>map[k])))}</span>`:"";
+    const bad=lost.length?`<span class="unres">?${kind}:${esc(lost.join(","))}</span>`:"";
+    return body&&bad ? body+" "+bad : (body||bad);
+  };
+  out=out.replace(/\[@fig:([A-Za-z0-9_,\s]+)\]/g, xref("fig",fn));
+  out=out.replace(/\[@tbl:([A-Za-z0-9_,\s]+)\]/g, xref("tbl",tn));
+  out=out.replace(/\[@eq:([A-Za-z0-9_,\s]+)\]/g, xref("eq",en));
   out=out.replace(/\[@wp:([A-Za-z0-9_]+)\]/g,(m,id)=>{ const w=wpById(id);
     return w? `<span class="wpref" title="${esc(w.title||"")}">${esc(w.code||"WP")}</span>` : `<span class="unres">?wp:${esc(id)}</span>`; });
   out=out.replace(/\[@obj:([A-Za-z0-9_]+)\]/g,(m,id)=>{ const o=objById(id);
@@ -1968,6 +2392,89 @@ function affStyle(){
           place: A.place==="footnote" ? "footnote" : "block"};
 }
 const AFF_LETTERS="abcdefghijklmnopqrstuvwxyz";
+/* ---------- author names ----------
+   An author is held as three parts, because a byline is the one place where
+   the same person has to appear as "Jane A. Doe", "J. A. Doe" and
+   "Doe, J. A." depending on the journal. Holding one string and hoping to
+   take it apart at print time gets middle names, particles and hyphenated
+   surnames wrong; holding the parts gets them right by construction.
+   `a.name` stays, kept in step with the parts, so search, toasts and the
+   {authors} placeholder go on working. */
+const NAME_STYLES=[
+  {k:"first-last",  l:"Jane A. Doe — given name in full"},
+  {k:"initials-last", l:"J. A. Doe — initials, spaced"},
+  {k:"initials-tight-last", l:"J.A. Doe — initials, unspaced"},
+  {k:"last-first",  l:"Doe, Jane A. — surname first"},
+  {k:"last-initials", l:"Doe, J. A. — surname first, initials"},
+  {k:"last-initials-tight", l:"Doe JA — surname then initials, no stops"}
+];
+/* "a" -> "A.", "a b" -> "A. B.", "A.B." -> "A. B." */
+function normInitials(x){
+  return String(x||"").split(/[\s.]+/).filter(Boolean).map(w=>w[0].toUpperCase()+".").join(" ");
+}
+function bareInitials(x){
+  return String(x||"").split(/[\s.]+/).filter(Boolean).map(w=>w[0].toUpperCase()).join("");
+}
+/* Surname particles, which belong to the surname wherever they are written. */
+const PARTICLE=/^(van|von|der|den|de|del|della|di|da|dos|du|la|le|ter|ten|te|op|bin|ibn|abu|al|el|st\.?)$/i;
+/* Split a name someone typed, in either order, into parts. A comma means the
+   surname came first — that is what RIS and most reference managers hand us. */
+function parsePersonName(str){
+  const s=String(str||"").trim();
+  if(!s) return {first:"",initials:"",last:""};
+  if(s.includes(",")){
+    const [lastRaw,rest]=s.split(",");
+    const w=(rest||"").trim().split(/\s+/).filter(Boolean);
+    /* RIS files park a surname particle at the end of the given names:
+       "Santos-Durndell, Vannia C. dos". Give it back to the surname, or it
+       becomes a middle initial that was never anybody's. */
+    let last=(lastRaw||"").trim();
+    while(w.length && PARTICLE.test(w[w.length-1])) last=w.pop()+" "+last;
+    return {first:w[0]||"", initials:normInitials(w.slice(1).join(" ")), last};
+  }
+  const w=s.split(/\s+/).filter(Boolean);
+  if(w.length===1) return {first:"", initials:"", last:w[0]};
+  /* Keep a particle with the surname: "van der Waals", "de Vries". */
+  let cut=w.length-1;
+  while(cut>1 && PARTICLE.test(w[cut-1])) cut--;
+  const last=w.slice(cut).join(" "), mid=w.slice(1,cut).join(" ");
+  return {first:w[0], initials:normInitials(mid), last};
+}
+function nameParts(a){
+  a=a||{};
+  if(a.last||a.first||a.initials) return {first:a.first||"", initials:a.initials||"", last:a.last||""};
+  return parsePersonName(a.name);
+}
+/* The display name: what appears anywhere the journal's byline style is not
+   the question — the author list in Authors, a toast, the palette. */
+function authorName(a){ const p=nameParts(a); return [p.first,p.initials,p.last].filter(Boolean).join(" ").trim()||(a&&a.name)||""; }
+/* The byline name, in whichever shape the layout asks for. */
+function authorNameStyled(a,style){
+  const p=nameParts(a);
+  const st=style||(docFormat().authorBlock||{}).nameStyle||"first-last";
+  const ini=[normInitials(p.first),p.initials].filter(Boolean).join(" ");
+  const tight=[bareInitials(p.first),bareInitials(p.initials)].join("");
+  const full=[p.first,p.initials].filter(Boolean).join(" ");
+  if(!p.last) return full||authorName(a);
+  switch(st){
+    case "initials-last": return `${ini} ${p.last}`.trim();
+    case "initials-tight-last": return `${tight.split("").map(c=>c+".").join("")} ${p.last}`.trim();
+    case "last-first": return full? `${p.last}, ${full}` : p.last;
+    case "last-initials": return ini? `${p.last}, ${ini}` : p.last;
+    case "last-initials-tight": return tight? `${p.last} ${tight}` : p.last;
+    default: return `${full} ${p.last}`.trim();
+  }
+}
+/* Whenever a part changes, `name` follows. Nothing else has to know. */
+function syncAuthorName(a){ if(!a) return a; a.name=authorName(a); return a; }
+/* One printed address. The postcode belongs with the town it sorts —
+   "London WC1H 0AJ", not "London, WC1H 0AJ" — which is why it is not simply
+   another comma-separated field. */
+function orgAddress(o){
+  o=o||{};
+  const town=[o.city,o.postcode].filter(Boolean).join(" ");
+  return [o.dept,o.name,town,o.country].filter(Boolean).join(", ");
+}
 /* An author may sit in several organisations. Each one is numbered (or
    lettered) at its first appearance anywhere in the byline, and an author
    carries all of their marks, in the order they chose — "Name1,2", "Name*a,b". */
@@ -1981,13 +2488,14 @@ function authorLine(clean){
   const names=S.authors.map(a=>{
     const m=authorOrgs(a).map(id=>markOf(orgIdx[id])).join(",");
     const star=a.corresponding?"*":"", dag=a.equal?"†":"";
-    if(!m) return esc(a.name)+(clean?(star?`<sup>${star}</sup>`:""):`<sup class="unres">?</sup>`)+(dag?`<sup>${dag}</sup>`:"");
-    return esc(a.name)+(A.mark==="letter"
+    const nm=authorNameStyled(a);
+    if(!m) return esc(nm)+(clean?(star?`<sup>${star}</sup>`:""):`<sup class="unres">?</sup>`)+(dag?`<sup>${dag}</sup>`:"");
+    return esc(nm)+(A.mark==="letter"
       ? `<sup>${star}${m}${dag}</sup>`
       : `<sup>${m}</sup>${star?"<sup>*</sup>":""}${dag?`<sup>${dag}</sup>`:""}`);
   }).join(", ");
   const affs=Object.entries(orgIdx).map(([id,i])=>{ const o=S.orgs.find(x=>x.id===id)||{};
-    return `<sup>${markOf(i)}</sup> ${esc([o.dept,o.name,o.city,o.country].filter(Boolean).join(", "))}`; }).join("<br>");
+    return `<sup>${markOf(i)}</sup> ${esc(orgAddress(o))}`; }).join("<br>");
   return {names,affs,place:A.place};
 }
 function vWrite(){
@@ -2058,7 +2566,19 @@ function vWrite(){
   </div>
   ${isDmp?depositPanelHTML():""}
   <div class="cols c-60-40">
-    <div>${front}${body}</div>
+    <div>
+      <div class="secbar">
+        <span class="lbl">Add</span>
+        <button class="btn sm" data-addsec="1">+ Section</button>
+        <button class="btn sm" data-addsec="2">+ Sub-section</button>
+        <button class="btn sm" data-addsec="3">+ In-line heading</button>
+        <span class="where" id="secWhere" title="The section you are reading"></span>
+      </div>
+      ${front}${body}
+      <div style="display:flex;justify-content:center;padding:4px 0 10px">
+        <button class="btn" data-addsec="1">+ Section at the end</button>
+      </div>
+    </div>
     <div class="sticky">
       <div class="panel">
         <header><h3>Galley</h3><span class="chip b" title="Layout template">${esc((templateById(S.templateId)||{}).label||"No template")}</span><span class="chip" title="Citation style">${esc(Sp.label)}</span>
@@ -2227,7 +2747,7 @@ function blockEditor(sec,b){
   return wrap(fmtBar(b.id)+`<textarea class="inp" data-block="${sec.id}|${b.id}" rows="4" spellcheck="true" aria-label="Paragraph" aria-autocomplete="list">${esc(b.text)}</textarea>
     <div class="blkbar">
       ${blockGrip(sec,b)}
-      <button class="btn sm" data-acopen="${b.id}" title="Reference a sample, citation, figure, table, equation or acronym — or just type @">@ Reference…</button>
+      <button class="btn sm" data-refpicker="${b.id}" title="Pick figures, tables, equations, citations, samples or acronyms — several at once">Reference…</button>
       <button class="btn sm" data-insmenu="${sec.id}|${b.id}" aria-haspopup="true" aria-expanded="false" title="Insert a figure, table, equation or Gantt chart at the caret — the paragraph splits around it">Insert ▾</button>
       <span class="hint" title="Inline maths">$x$ maths</span>
       <span class="wc" data-wc="${b.id}">${wordCount(b.text)} words</span>
@@ -3390,7 +3910,7 @@ const PSYM_PHYS=[
   ["k_{B}","Boltzmann constant — subscript notation"],["×10⁻","times ten to the minus"],
   ["⁻¹","to the minus one"],["⁻²","to the minus two"],["⁻³","to the minus three"],
   ["⁴","superscript 4"],["⁵","superscript 5"],["⁶","superscript 6"],["…","ellipsis"],
-  ["e⁻","electron"],["hν","photon energy"],["Ti 2p₃/₂","spin-orbit component"]
+  ["e⁻","electron"],["hν","photon energy"],["2p₃/₂","spin-orbit component"]
 ];
 const PSYM_GREEK_L=[["α","alpha"],["β","beta"],["γ","gamma"],["δ","delta"],["ε","epsilon"],
   ["ζ","zeta"],["η","eta"],["θ","theta"],["ι","iota"],["κ","kappa"],["λ","lambda"],
@@ -3786,13 +4306,15 @@ const CREDIT=["Conceptualization","Methodology","Investigation","Formal analysis
    keeps their usual organisations BY VALUE, because the document ids they
    came from mean nothing in the next document. */
 const sameName=(a,b)=>String(a||"").trim().toLowerCase()===String(b||"").trim().toLowerCase();
-function orgSnapshot(o){ o=o||{}; return {name:o.name||"",dept:o.dept||"",city:o.city||"",country:o.country||"",ror:o.ror||""}; }
+function orgSnapshot(o){ o=o||{}; return {name:o.name||"",dept:o.dept||"",city:o.city||"",postcode:o.postcode||"",country:o.country||"",ror:o.ror||""}; }
 function libSavePerson(a){
   const orgs=authorOrgs(a).map(id=>orgSnapshot(S.orgs.find(o=>o.id===id)));
   let e=(S.peopleLib||[]).find(p=>sameName(p.name,a.name));
   const made=!e;
   if(made){ e={id:uid("pl"),name:a.name,orcid:"",email:"",orgs:[],credit:[]}; S.peopleLib.push(e); }
-  e.name=a.name; e.orgs=orgs; e.credit=(a.credit||[]).slice();
+  const np=nameParts(a);
+  e.first=np.first; e.initials=np.initials; e.last=np.last;
+  e.name=authorName(a); e.orgs=orgs; e.credit=(a.credit||[]).slice();
   return made;
 }
 function libSaveOrg(o){
@@ -3811,27 +4333,52 @@ function docOrgFor(snap){
 }
 function libAddPerson(p){
   const ids=(p.orgs||[]).map(s=>docOrgFor(s).id);
-  S.authors.push({id:uid("au"),name:p.name||"",orgs:ids,corresponding:false,equal:false,credit:(p.credit||[]).slice()});
+  const np=nameParts(p);
+  S.authors.push(syncAuthorName({id:uid("au"),first:np.first,initials:np.initials,last:np.last,name:"",
+    orgs:ids,corresponding:false,equal:false,credit:(p.credit||[]).slice()}));
 }
+/* The library panel is for *reaching for* someone, not for editing them: a
+   name, where they work, and an Add button. The full fields are one click
+   away, because a saved person needs correcting far less often than they need
+   adding, and putting every field on screen made the panel the tallest thing
+   in the view. */
 function libPanelHTML(){
-  const P=S.peopleLib||[], O=S.orgLib||[];
-  return `<div class="panel"><header><h3>My library</h3><span class="chip">${P.length} people · ${O.length} organisations</span></header>
+  const P=S.peopleLib||[], O=S.orgLib||[], edit=!!ui.libEdit;
+  const person=p=>{
+    const np=nameParts(p), where=(p.orgs||[]).map(x=>x.name).filter(Boolean).join(" · ");
+    if(!edit) return `<li><div class="grow">
+      <div class="ttl">${esc(authorName(p)||"(unnamed)")}</div>
+      <div class="meta">${esc(where||"no saved organisation")}${p.orcid?` · <span class="mono">${esc(p.orcid)}</span>`:""}</div>
+      </div><div class="acts"><button class="btn sm p" data-pluse="${p.id}">Add</button></div></li>`;
+    return `<li><div class="grow stack" style="gap:5px">
+      <div class="row"><input class="inp" data-plf="${p.id}|first" value="${esc(np.first)}" placeholder="Given name" aria-label="Given name"><input class="inp" data-plf="${p.id}|initials" value="${esc(np.initials)}" placeholder="Initials" aria-label="Initials" style="max-width:90px"><input class="inp" data-plf="${p.id}|last" value="${esc(np.last)}" placeholder="Surname" aria-label="Surname"></div>
+      <div class="row"><input class="inp mono" data-plf="${p.id}|orcid" value="${esc(p.orcid||"")}" placeholder="ORCID" aria-label="ORCID"><input class="inp" data-plf="${p.id}|email" value="${esc(p.email||"")}" placeholder="Email" aria-label="Email"></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">${(p.orgs||[]).length?(p.orgs||[]).map(x=>`<span class="chip">${esc(x.name||"—")}</span>`).join(""):`<span class="chip warn">no saved organisations</span>`}</div>
+      </div><div class="acts"><button class="btn sm" data-pluse="${p.id}">Add</button><button class="btn sm danger" data-pldel="${p.id}" aria-label="Remove ${esc(p.name||"")} from the library">×</button></div></li>`;
+  };
+  const org=o=>{
+    const line=[o.dept,[o.city,o.postcode].filter(Boolean).join(" "),o.country].filter(Boolean).join(", ");
+    if(!edit) return `<li><div class="grow">
+      <div class="ttl">${esc(o.name||"(unnamed)")}</div>
+      <div class="meta">${esc(line||"no address")}</div>
+      </div><div class="acts"><button class="btn sm p" data-oluse="${o.id}">Add</button></div></li>`;
+    return `<li><div class="grow stack" style="gap:5px">
+      <input class="inp" data-olf="${o.id}|name" value="${esc(o.name||"")}" aria-label="Saved organisation name">
+      <div class="row"><input class="inp" data-olf="${o.id}|dept" value="${esc(o.dept||"")}" placeholder="Department" aria-label="Department"><input class="inp" data-olf="${o.id}|city" value="${esc(o.city||"")}" placeholder="City" aria-label="City"></div>
+      <div class="row"><input class="inp" data-olf="${o.id}|postcode" value="${esc(o.postcode||"")}" placeholder="Postcode / ZIP" aria-label="Postcode"><input class="inp" data-olf="${o.id}|country" value="${esc(o.country||"")}" placeholder="Country" aria-label="Country"></div>
+      <div class="row"><input class="inp mono" data-olf="${o.id}|ror" value="${esc(o.ror||"")}" placeholder="ROR id" aria-label="ROR id"></div>
+      </div><div class="acts"><button class="btn sm" data-oluse="${o.id}">Add</button><button class="btn sm danger" data-oldel="${o.id}" aria-label="Remove ${esc(o.name||"")} from the library">×</button></div></li>`;
+  };
+  return `<div class="panel"><header><h3>My library</h3><span class="chip">${P.length} people · ${O.length} organisations</span>
+    <div class="acts"><button class="btn sm" id="libEditToggle" aria-pressed="${edit}">${edit?"Done editing":"Edit"}</button></div></header>
     <div class="bd stack">
-      <div class="note">Kept on this installation, not in the document — like the reference library. Put one in this document with <b>+ From library</b>.</div>
+      <div class="note">Kept on this installation, not in the document. <b>Add</b> puts one in this document${edit?"":" — use <b>Edit</b> to correct a saved entry"}.</div>
       <div class="fld"><label>People</label>
-        ${P.length?`<ul class="lst">${P.map(p=>`<li><div class="grow stack" style="gap:5px">
-          <input class="inp" data-plf="${p.id}|name" value="${esc(p.name||"")}" aria-label="Saved person name">
-          <div class="row"><input class="inp mono" data-plf="${p.id}|orcid" value="${esc(p.orcid||"")}" placeholder="ORCID" aria-label="ORCID"><input class="inp" data-plf="${p.id}|email" value="${esc(p.email||"")}" placeholder="Email" aria-label="Email"></div>
-          <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">${(p.orgs||[]).length?(p.orgs||[]).map(s=>`<span class="chip">${esc(s.name||"—")}</span>`).join(""):`<span class="chip warn">no saved organisations</span>`}</div>
-        </div><div class="acts"><button class="btn sm" data-pluse="${p.id}">Add</button><button class="btn sm danger" data-pldel="${p.id}" aria-label="Remove ${esc(p.name||"")} from the library">×</button></div></li>`).join("")}</ul>`
+        ${P.length?`<ul class="lst">${P.map(person).join("")}</ul>`
         :`<div class="empty">Nobody saved yet — <b>Save to library</b> on an author puts them here.</div>`}
       </div>
       <div class="fld"><label>Organisations</label>
-        ${O.length?`<ul class="lst">${O.map(o=>`<li><div class="grow stack" style="gap:5px">
-          <input class="inp" data-olf="${o.id}|name" value="${esc(o.name||"")}" aria-label="Saved organisation name">
-          <div class="row"><input class="inp" data-olf="${o.id}|dept" value="${esc(o.dept||"")}" placeholder="Department" aria-label="Department"><input class="inp" data-olf="${o.id}|city" value="${esc(o.city||"")}" placeholder="City" aria-label="City"></div>
-          <div class="row"><input class="inp" data-olf="${o.id}|country" value="${esc(o.country||"")}" placeholder="Country" aria-label="Country"><input class="inp mono" data-olf="${o.id}|ror" value="${esc(o.ror||"")}" placeholder="ROR id" aria-label="ROR id"></div>
-        </div><div class="acts"><button class="btn sm" data-oluse="${o.id}">Add</button><button class="btn sm danger" data-oldel="${o.id}" aria-label="Remove ${esc(o.name||"")} from the library">×</button></div></li>`).join("")}</ul>`
+        ${O.length?`<ul class="lst">${O.map(org).join("")}</ul>`
         :`<div class="empty">No organisations saved yet.</div>`}
       </div>
     </div></div>`;
@@ -3847,12 +4394,14 @@ function vPeople(){
     <div class="panel"><header><h3>Authors</h3><span class="chip">${S.authors.length}</span>
       <div class="acts"><button class="btn sm" id="fromLibPeople">+ From library</button></div></header>
       <ul class="lst">${S.authors.map((a,i)=>{
-        const mine=authorOrgs(a), free=S.orgs.filter(o=>!mine.includes(o.id));
+        const mine=authorOrgs(a), free=S.orgs.filter(o=>!mine.includes(o.id)), np=nameParts(a);
         return `<li>
         <span class="chip mono" style="flex:0 0 auto">${i+1}</span>
         <div class="grow stack" style="gap:6px">
           <div class="row">
-            <div class="fld"><label>Name</label><input class="inp" data-af="${a.id}|name" value="${esc(a.name)}"></div>
+            <div class="fld"><label>Given name</label><input class="inp" data-af="${a.id}|first" value="${esc(np.first)}" placeholder="Jane"></div>
+            <div class="fld" style="flex:0 0 110px"><label>Initials</label><input class="inp" data-af="${a.id}|initials" value="${esc(np.initials)}" placeholder="A." title="Middle initials, if the journal prints them"></div>
+            <div class="fld"><label>Surname</label><input class="inp" data-af="${a.id}|last" value="${esc(np.last)}" placeholder="Doe"></div>
             <div class="fld"><label>Organisations</label>
               <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;min-height:26px">
                 ${mine.length?mine.map((id,j)=>{ const o=S.orgs.find(x=>x.id===id)||{name:"?"};
@@ -3866,6 +4415,7 @@ function vPeople(){
               </div></div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <span class="chip" title="How this name will appear in the byline, in the current layout">${esc(authorNameStyled(a))}</span>
             <label class="chip"><input type="checkbox" data-af="${a.id}|corresponding" ${a.corresponding?"checked":""}> corresponding</label>
             <label class="chip"><input type="checkbox" data-af="${a.id}|equal" ${a.equal?"checked":""}> equal contribution</label>
             <span class="chip ${a.credit.length?"b":"warn"}">${a.credit.length?a.credit.length+" CRediT role"+(a.credit.length>1?"s":""):"no CRediT roles"}</span>
@@ -3881,7 +4431,8 @@ function vPeople(){
         <ul class="lst">${S.orgs.map(o=>`<li><div class="grow stack" style="gap:5px">
           <input class="inp" data-of="${o.id}|name" value="${esc(o.name)}" aria-label="Organisation name">
           <div class="row"><input class="inp" data-of="${o.id}|dept" value="${esc(o.dept)}" placeholder="Department" aria-label="Department"><input class="inp" data-of="${o.id}|city" value="${esc(o.city)}" placeholder="City" aria-label="City"></div>
-          <div class="row"><input class="inp" data-of="${o.id}|country" value="${esc(o.country)}" placeholder="Country" aria-label="Country"><input class="inp mono" data-of="${o.id}|ror" value="${esc(o.ror)}" placeholder="ROR id" aria-label="ROR id"></div>
+          <div class="row"><input class="inp" data-of="${o.id}|postcode" value="${esc(o.postcode||"")}" placeholder="Postcode / ZIP" aria-label="Postcode"><input class="inp" data-of="${o.id}|country" value="${esc(o.country)}" placeholder="Country" aria-label="Country"></div>
+          <div class="row"><input class="inp mono" data-of="${o.id}|ror" value="${esc(o.ror)}" placeholder="ROR id" aria-label="ROR id"></div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="meta">${S.authors.filter(a=>authorOrgs(a).includes(o.id)).length} author(s)</span>
             <button class="btn sm" data-saveorg="${o.id}">Save to library</button></div>
         </div><div class="acts"><button class="btn sm danger" data-delorg="${o.id}" aria-label="Remove organisation ${esc(o.name)}">×</button></div></li>`).join("")}</ul></div>
@@ -3900,7 +4451,7 @@ function vPeople(){
 /* ============================ STYLE LIBRARY ============================ */
 function vStyles(){
   const cur=styleOf();
-  const sample=S.refs[1]||S.refs[0]||{authors:["Isaacs, Mark A.","Parlett, Christopher M. A."],title:"An example reference, shown until the library has one",journal:"Journal of Examples",journalAbbrev:"J. Ex.",year:"2026",volume:"1",issue:"1",pages:"1-2",doi:"",type:"JOUR",keywords:[]};
+  const sample=S.refs[1]||S.refs[0]||{authors:["Doe, Jane","Roe, Richard"],title:"An example reference, shown until the library has one",journal:"Journal of Example Studies",journalAbbrev:"J. Ex. Stud.",year:"2026",volume:"1",issue:"1",pages:"1-2",doi:"",type:"JOUR",keywords:[]};
   return `
   <div class="viewhead">
     <div><h2>Style library</h2><div class="sub">Styles you have used, kept for next time. A style carries the citation shape, the bibliography format and the journal's abstract limit — the document points at one.</div></div>
@@ -5362,7 +5913,7 @@ function openIdentity(then){
   const me=S.me||{name:"",initials:"",colour:EDCOLOURS[0]};
   modal("Who is editing?", `<div class="stack">
     <div class="note">Shared copies of a document carry whatever name is set here. It is recorded on every revision and on every block you touch, so the draft log can say who changed what.</div>
-    <div class="fld"><label>Name</label><input class="inp" id="idName" value="${esc(me.name)}" placeholder="e.g. Chris Parlett"></div>
+    <div class="fld"><label>Name</label><input class="inp" id="idName" value="${esc(me.name)}" placeholder="e.g. Jane Doe"></div>
     <div class="fld"><label>Colour</label><div class="swatches" role="group" aria-label="Colour">${EDCOLOURS.map(c=>`<button type="button" data-idcol="${c}" style="background:${c}" aria-pressed="${c===me.colour}" aria-label="${c}"></button>`).join("")}</div></div>
   </div>`, `<button class="btn" data-close>Cancel</button><button class="btn p" id="idGo">Save</button>`);
   let col=me.colour;
@@ -5564,6 +6115,21 @@ const FORMAT_NATURE_SUBMIT = deepMerge(FORMAT_ACS_SUBMIT, {
     h1:{transform:"none", size:14, weight:400}, h2:{size:12, weight:700}, abstract:{label:false} },
   captions:{figureLabel:"Fig.", figureRef:"Fig.", sep:" |"}
 });
+/* AVS / AIP (JVST) submission. What the journal asks you to SEND: one column,
+   double-spaced, 12 pt, so an editor and referees can write on it. The
+   two-column page below is what AIP's typesetter produces afterwards — it is
+   not a submission format, and choosing it for a manuscript you are about to
+   submit is the mistake this pair exists to prevent. Roman-numbered headings
+   and "FIG. 1." captions are kept, because REVTeX numbers them that way from
+   the manuscript on. */
+const FORMAT_AVS_SUBMIT = deepMerge(FORMAT_ACS_SUBMIT, {
+  paraIndent:0.85,
+  fonts:{ title:{size:14, weight:700, align:"center"}, authors:{italic:false},
+    h1:{transform:"uppercase", size:12, weight:700}, h2:{weight:700, italic:false},
+    abstract:{label:false} },
+  captions:{figureLabel:"FIG.", figureRef:"Fig.", tableLabel:"TABLE", tableRef:"Table", sep:"."},
+  headings:{numbering:"roman"}
+});
 /* AVS / AIP (JVST): the REVTeX two-column typeset page, measured off the
    sample PDF — Letter, 19 mm sides, two 86 mm columns, 10 pt Times,
    Roman-numbered capital headings, "FIG. 1." captions at 8 pt. */
@@ -5641,7 +6207,21 @@ const TEMPLATES = [
            "Author information — affiliations, contributions, corresponding author with ORCID — sits after the title."]
   },
   {
-    id:"tpl_avs", family:"AVS / AIP", label:"AVS (JVST) — REVTeX two-column",
+    id:"tpl_avs_submit", family:"AVS / AIP", label:"AVS (JVST) — submission (single column, double-spaced)",
+    kind:"publication", style:"aps", verified:true, format:FORMAT_AVS_SUBMIT,
+    source:"AIP/AVS author instructions for manuscript submission; page measured from the AVS REVTeX sample supplied by the author, 20 September 2026",
+    abstractLimit:250, citation:"superscript numeric",
+    sections:["Introduction","Experimental","Results and Discussion","Summary and Conclusions"],
+    statements:["Acknowledgments","Author Declarations","Data Availability"],
+    experimental:"afterIntro",
+    page:{header:{left:"",centre:"",right:""}, footer:{left:"",centre:"",right:""}, pageNumbers:true, numberIn:"footer-centre"},
+    notes:["US Letter, 1-inch margins, ONE column, Times 12 pt, double-spaced — what JVST asks you to submit. The typeset two-column page is the other AVS template, and is not for submission.",
+           "Headings keep their REVTeX Roman numbering (I. INTRODUCTION, A. Sub-heading) so the manuscript matches the proof.",
+           "Captions are \"FIG. 1.\" and \"TABLE 1.\"; figures sit in line with their captions.",
+           "Page numbers on every page. Line numbers are welcomed by AVS but are added by the submission system, not here."]
+  },
+  {
+    id:"tpl_avs", family:"AVS / AIP", label:"AVS (JVST) — published look (two columns; not for submission)",
     kind:"publication", style:"aps", verified:true, format:FORMAT_AVS,
     source:"AVS REVTeX sample (AVS template.pdf), supplied by the author, 20 September 2026",
     abstractLimit:250, citation:"superscript numeric",
@@ -5898,7 +6478,7 @@ const REF_TYPES = [
   {k:"dataset", l:"Dataset", fields:["authors","title","publisher","year","doi","version"], hint:"Cite the deposit you made, not the paper that used it."},
   {k:"software", l:"Software", fields:["authors","title","publisher","year","version","doi","url"]},
   {k:"report", l:"Report", fields:["authors","title","publisher","year","number","url"]},
-  {k:"standard", l:"Standard", fields:["authors","title","number","publisher","year"], hint:"ISO 15472 for XPS binding-energy scale calibration, for instance."},
+  {k:"standard", l:"Standard", fields:["authors","title","number","publisher","year"], hint:"An ISO or ASTM standard, for instance."},
   {k:"webpage", l:"Web page", fields:["authors","title","containerTitle","url","accessed"]}
 ];
 const REF_FIELD_LABEL = {authors:"Authors", title:"Title", journal:"Journal", journalAbbrev:"Abbreviation",
@@ -6294,6 +6874,12 @@ function fmtFontSel(path, cur){
 function fmtNum(path, v, step, unit, min, max){ return `<div style="display:flex;align-items:center;gap:5px"><input class="inp" type="number" data-fmt="${path}" data-ft="num" value="${v??""}" step="${step||1}"${min!=null?` min="${min}"`:""}${max!=null?` max="${max}"`:""} style="max-width:92px">${unit?`<span class="hint" style="font-size:11px;color:var(--muted)">${esc(unit)}</span>`:""}</div>`; }
 function fmtSel(path, v, opts){ return `<select class="inp" data-fmt="${path}" data-ft="text">${opts.map(([k,l])=>`<option value="${k}"${String(k)===String(v)?" selected":""}>${esc(l)}</option>`).join("")}</select>`; }
 function fmtChk(path, v, label){ return `<label class="chip" style="justify-content:flex-start"><input type="checkbox" data-fmt="${path}" data-ft="bool" ${v?"checked":""}> ${esc(label)}</label>`; }
+/* The first-line indent is a yes/no decision far more often than it is a
+   measurement, so it gets a switch as well as the box. Turning it off keeps
+   the size, so turning it back on returns to what the template asked for
+   rather than to an arbitrary 1 em. */
+let indentMemo=null;
+function fmtIndentChk(v){ return `<label class="chip" style="justify-content:flex-start"><input type="checkbox" data-fmt="paraIndent" data-ft="indent" ${v?"checked":""}> Indent first line</label>`; }
 function fmtCol(path, v){ return `<div style="display:flex;gap:6px;align-items:center"><input type="color" data-fmt="${path}" data-ft="text" value="${esc(/^#[0-9a-fA-F]{6}$/.test(v||"")?v:"#000000")}" style="width:36px;height:30px;padding:0;border:1px solid var(--line-strong);border-radius:6px;background:none"><span class="mono" style="font-size:11px;color:var(--muted)">${esc(v||"")}</span></div>`; }
 function fmtTxt(path, v, ph){ return `<input class="inp" data-fmt="${path}" data-ft="text" value="${esc(v??"")}" placeholder="${esc(ph||"")}">`; }
 const F_ = (label, inner, w) => `<div class="fld"${w?` style="flex:0 0 ${w}"`:""}><label>${esc(label)}</label>${inner}</div>`;
@@ -6317,16 +6903,23 @@ function vFormat(){
   </div>
   <div class="cols c-60-40">
     <div class="stack">
+      <div class="panel"><header><h3>Language</h3>${(()=>{ const n=variantScan().length; return n?`<span class="chip warn">${n} spelling${n>1?"s":""} from the other side of the Atlantic</span>`:'<span class="chip ok">spelling matches</span>'; })()}
+        <div class="acts"><button class="btn sm" id="fmtVariants">Review spellings</button></div></header><div class="bd stack">
+        <div class="row">${F_("Written in", `<select class="inp" id="fmtLang">${LANGS.map(x=>`<option value="${x.k}"${x.k===docLang()?" selected":""}>${esc(x.l)}</option>`).join("")}</select>`)}</div>
+        <div class="note">This is what the spell-checker underlines against and what hyphenation follows. It also decides which way round the British/American check runs — right-click a word to take a suggestion, or use <b>Review spellings</b> for the whole document. Right-click also offers synonyms for the words scientific prose tends to wear out; hold <b>Shift</b> while right-clicking for your system's own spelling menu.</div>
+      </div></div>
       <div class="panel"><header><h3>Page</h3></header><div class="bd stack">
         <div class="row">${F_("Paper", fmtSel("page.size", F.page.size, Object.entries(PAGE_SIZES).map(([k,v])=>[k,v.label])))}${F_("Orientation", fmtSel("page.orientation", F.page.orientation||"portrait", [["portrait","Portrait"],["landscape","Landscape"]]),"150px")}</div>
         <div class="row">${F_("Top margin", fmtNum("page.margins.top", F.page.margins.top, .5, "mm", 5, 80))}${F_("Bottom", fmtNum("page.margins.bottom", F.page.margins.bottom, .5, "mm", 5, 80))}${F_("Left", fmtNum("page.margins.left", F.page.margins.left, .5, "mm", 5, 80))}${F_("Right", fmtNum("page.margins.right", F.page.margins.right, .5, "mm", 5, 80))}</div>
         <div class="row">${F_("Columns", fmtSel("columns", F.columns, [[1,"One column"],[2,"Two columns"],[3,"Three columns"]]))}${F_("Column gap", fmtNum("columnGap", F.columnGap, .5, "mm", 2, 30))}${F_("Header from top edge", fmtNum("page.headerGap", F.page.headerGap, .5, "mm", 3, 40))}${F_("Footer from bottom edge", fmtNum("page.footerGap", F.page.footerGap, .5, "mm", 3, 40))}</div>
       </div></div>
-      ${fontGroup("Body text","body",f.body,`<div class="row">${F_("Line height", fmtNum("fonts.body.lineHeight", f.body.lineHeight, .05, "× size", 1, 3),"130px")}${F_("Space after paragraph", fmtNum("paraGap", F.paraGap, .5, "pt", 0, 40),"150px")}${F_("First-line indent", fmtNum("paraIndent", F.paraIndent, .25, "em", 0, 5),"140px")}
+      ${fontGroup("Body text","body",f.body,`<div class="row">${F_("Line height", fmtNum("fonts.body.lineHeight", f.body.lineHeight, .05, "× size", 1, 3),"130px")}${F_("Space after paragraph", fmtNum("paraGap", F.paraGap, .5, "pt", 0, 40),"150px")}${F_("First-line indent", fmtNum("paraIndent", F.paraIndent, .25, "em", 0, 5),"140px")}<div class="fld" style="flex:0 0 150px"><label>&nbsp;</label>${fmtIndentChk(F.paraIndent>0)}</div>
         ${F_("Alignment", fmtSel("align", F.align||(F.justify?"justify":"left"), [["justify","Justified"],["left","Left (ragged right)"],["center","Centred"],["right","Right"]]))}<div class="fld" style="flex:0 0 120px"><label>&nbsp;</label>${fmtChk("hyphenate", F.hyphenate, "Hyphenate")}</div></div>
         <div class="note">A single paragraph can differ: the ≡ buttons on its toolbar set left, centred, right or justified for that paragraph alone.</div>`)}
       ${fontGroup("Title","title",f.title,`<div class="row">${F_("Weight", fmtSel("fonts.title.weight", f.title.weight||700, weightOpts))}${F_("Alignment", fmtSel("fonts.title.align", f.title.align||"left", [["left","Left"],["center","Centred"]]))}</div>`)}
       ${fontGroup("Authors","authors",f.authors,`<div class="row"><div class="fld" style="flex:0 0 120px"><label>Names</label>${fmtChk("fonts.authors.italic", f.authors.italic, "Italic")}</div>${F_("Addresses go", fmtSel("authorBlock.place", F.authorBlock.place, AFF_PLACES.map(x=>[x.k,x.l])))}${F_("Marked with", fmtSel("authorBlock.mark", F.authorBlock.mark, AFF_MARKS.map(x=>[x.k,x.l])))}</div>
+        <div class="row">${F_("Name style", fmtSel("authorBlock.nameStyle", F.authorBlock.nameStyle||"first-last", NAME_STYLES.map(x=>[x.k,x.l])))}</div>
+        <div class="note">The byline is built from each author's given name, initials and surname, so changing this restyles every name at once. Enter the parts in <b>Authors &amp; organisations</b>.</div>
         <div class="row">${F_("Address font", fmtFontSel("fonts.affiliations.family", f.affiliations.family))}${F_("Size", fmtNum("fonts.affiliations.size", f.affiliations.size, .5, "pt", 4, 30),"110px")}${F_("Colour", fmtCol("fonts.affiliations.colour", f.affiliations.colour||"#333333"),"130px")}<div class="fld" style="flex:0 0 120px"><label>&nbsp;</label>${fmtChk("fonts.affiliations.italic", f.affiliations.italic, "Italic")}</div></div>`)}
       ${fontGroup("Abstract","abstract",f.abstract,`<div class="row">${F_("Shown as", fmtSel("fonts.abstract.style", f.abstract.style||"rule", [["rule","Ruled on the left"],["box","Boxed"],["plain","Plain paragraph"]]))}<div class="fld"><label>&nbsp;</label>${fmtChk("fonts.abstract.label", f.abstract.label, "“Abstract.” label in front")}</div></div>`)}
       ${fontGroup("Section headings (A)","h1",f.h1,`<div class="row">${F_("Numbering", fmtSel("headings.numbering", (F.headings||{}).numbering||"none", [["none","None"],["decimal","1. / 2.1. / 2.1.1."],["roman","I. / A. / 1. (AIP)"]]))}${F_("Weight", fmtSel("fonts.h1.weight", f.h1.weight||700, weightOpts))}${F_("Case", fmtSel("fonts.h1.transform", f.h1.transform||"none", [["none","As typed"],["uppercase","CAPITALS"],["capitalize","Title Case"]]))}${F_("Mark before", fmtTxt("fonts.h1.mark", f.h1.mark, "e.g. ■ or 1."),"120px")}<div class="fld" style="flex:0 0 100px"><label>&nbsp;</label>${fmtChk("fonts.h1.italic", f.h1.italic, "Italic")}</div></div>`)}
@@ -6356,7 +6949,10 @@ function vFormat(){
 }
 function wireFormat(){
   const apply=(el)=>{ const path=el.dataset.fmt, t=el.dataset.ft; let v;
-    if(t==="bool") v=el.checked; else if(t==="num"){ v=parseFloat(el.value); if(!isFinite(v)) return; }
+    if(t==="bool") v=el.checked;
+    else if(t==="indent"){ const cur=docFormat().paraIndent||0;
+      if(el.checked) v=indentMemo||1; else { if(cur) indentMemo=cur; v=0; } }
+    else if(t==="num"){ v=parseFloat(el.value); if(!isFinite(v)) return; }
     else if(t==="font"){ if(el.value==="__custom"){ setFormat(path,"custom"); commit(); return; } v=el.value; }
     else v=el.value;
     if(path==="columns"||/\.weight$/.test(path)) v=+v;
@@ -6364,7 +6960,9 @@ function wireFormat(){
     setFormat(path,v); save();
     const g=$("#fmtGalley"); if(g){ g.style.cssText=formatVars(); g.innerHTML=previewDoc(); } };
   on("[data-fmt]","input",e=>{ if(e.target.dataset.ft!=="font"&&e.target.tagName!=="SELECT") apply(e.target); });
-  on("[data-fmt]","change",e=>{ apply(e.target); if(e.target.tagName==="SELECT"||e.target.type==="checkbox") { const path=e.target.dataset.fmt; if(/columns|page\.|authorBlock|captions|figures|abstract\.style|h1\.transform|headings\./.test(path)) render(); } });
+  on("[data-fmt]","change",e=>{ apply(e.target); if(e.target.tagName==="SELECT"||e.target.type==="checkbox") { const path=e.target.dataset.fmt; if(/columns|page\.|authorBlock|captions|figures|abstract\.style|h1\.transform|headings\.|^paraIndent$/.test(path)) render(); } });
+  const fl=$("#fmtLang"); if(fl) fl.onchange=()=>{ S.lang=fl.value; applyLang(); commit(`Written in ${langLabel(S.lang)}`); };
+  const fv=$("#fmtVariants"); if(fv) fv.onclick=openVariantReview;
   const fr=$("#fmtReset"); if(fr) fr.onclick=()=>{ S.format={}; commit("Formatting reset to the template",{undo:true}); };
   const fp=$("#fmtPreview"); if(fp) fp.onclick=()=>openPreview(sub);
   const fs=$("#fmtSaveTpl"); if(fs) fs.onclick=()=>{
@@ -6516,7 +7114,7 @@ function palItems(){
   (S.styleLib||[]).forEach(e=>it.push({kind:"Style",label:e.label,hint:e.id===S.style?"in use":"use",run:()=>{ if(e.id!==S.style){ S.style=e.id; e.lastUsed=nowISO(); commit("Style: "+styleOf().label); } }}));
   TEMPLATES.forEach(t=>it.push({kind:"Template",label:t.label,hint:t.id===S.templateId?"in use":"",run:()=>{ view="templates"; render(); reveal(`[data-tpluse="${t.id}"]`); }}));
   S.revisions.forEach(r=>it.push({kind:"Revision",label:`${r.label} — ${fmtDate(r.at)}`,hint:r.by,run:go("drafts",()=>{ ui.diffA=r.id; })}));
-  S.authors.forEach(a=>it.push({kind:"Author",label:a.name,run:()=>{ view="people"; render(); reveal(`[data-af="${a.id}|name"]`,true); }}));
+  S.authors.forEach(a=>it.push({kind:"Author",label:a.name,run:()=>{ view="people"; render(); reveal(`[data-af="${a.id}|last"]`,true); }}));
   (S.peopleLib||[]).forEach(p=>it.push({kind:"Person",label:p.name||"(unnamed)",hint:"saved",
     run:()=>{ view="people"; render(); reveal(`[data-plf="${p.id}|name"]`,true); }}));
   const A=[["Undo",undo],["Redo",redo],["New document",openNewDoc],["Save revision",()=>$("#btnSaveRev").click()],
@@ -6595,6 +7193,193 @@ function acItems(){
   (S.defs||[]).forEach(d=>it.push({kind:"abbr",v:`[@abbr:${d.id}]`,label:`${d.short} — ${d.long}`,key:`${d.short} ${d.long}`,kw:["abbr","acronym","abbreviation"]}));
   return it;
 }
+/* ============================ INSERT REFERENCES ============================
+   The typeahead is for one thing you already have in mind. This is for
+   several: pick a kind on the left, tick what you want on the right, insert.
+
+   Ticks may cross kinds, but the tokens do not — "Figs. 1-3" and "Table 2"
+   are two cross-references, not one, so one token is built per kind and they
+   are joined with the word a sentence would use. The footer shows the
+   finished text before anything is inserted, because a cross-reference that
+   reads wrongly is worth catching here rather than in the proof. */
+function refNumSort(a,b){
+  const pa=numParts(a.num), pb=numParts(b.num);
+  if(pa&&pb) return pa.p===pb.p ? pa.n-pb.n : pa.p.localeCompare(pb.p);
+  return String(a.num).localeCompare(String(b.num));
+}
+const REF_SI=n=>/^[A-Za-z]/.test(String(n||""));
+/* Every referenceable thing in the document, grouped the way someone looking
+   for one would group them. Empty groups are left out rather than shown
+   empty: a category with nothing in it is a dead end, not information. */
+function refCategories(){
+  const fn=figNumbers(), tn=tblNumbers(), en=eqNumbers(), nums=citedOrder();
+  refKeyMap();
+  const figs=[], tbls=[];
+  (S.figures||[]).forEach(f=>{ if(fn[f.ref]) figs.push({kind:"fig",key:f.ref,num:fn[f.ref],label:f.leadIn||"(no lead-in)"}); });
+  Object.keys(S.subdocs||{}).forEach(w=>orderedSections(w).forEach(sec=>(sec.blocks||[]).forEach(b=>{
+    if(b.type==="gantt"&&fn[b.id]) figs.push({kind:"fig",key:b.id,num:fn[b.id],label:"Gantt chart"}); })));
+  (S.tables||[]).forEach(t=>{ if(tn[t.ref]) tbls.push({kind:"tbl",key:t.ref,num:tn[t.ref],label:t.caption||"(no caption)"}); });
+  figs.sort(refNumSort); tbls.sort(refNumSort);
+
+  const eqs=Object.keys(en).map(k=>({kind:"eq",key:k,num:en[k],label:"Equation "+en[k]})).sort(refNumSort);
+  const cites=(S.refs||[]).map(r=>({kind:"ref",key:r._key,num:nums[r._key]||0,
+    label:`${splitName(r.authors[0]||"").last||"?"} ${r.year||""} — ${r.title||""}`,
+    note:nums[r._key]?`cited [${nums[r._key]}]`:"not cited yet"}))
+    .sort((a,b)=>(b.num?1:0)-(a.num?1:0)||a.num-b.num);
+  const samples=(S.samples||[]).map(s=>({kind:"sample",key:s.id,num:s.code,label:s.name||"",note:s.code}));
+  const abbrs=(S.defs||[]).map(d=>({kind:"abbr",key:d.id,num:d.short,label:d.long,note:d.short}));
+  const wps=((S.project||{}).wps||[]).map(w=>({kind:"wp",key:w.id,num:w.code,label:w.title||"",note:w.code}));
+  const objs=((S.project||{}).objectives||[]).map(o=>({kind:"obj",key:o.id,num:o.code,label:o.text||"",note:o.code}));
+
+  const C=(id,label,items)=>items.length?{id,label,items}:null;
+  return [
+    C("fig",  "Figures",          figs.filter(x=>!REF_SI(x.num))),
+    C("figS", "Figures (SI)",     figs.filter(x=>REF_SI(x.num))),
+    C("tbl",  "Tables",           tbls.filter(x=>!REF_SI(x.num))),
+    C("tblS", "Tables (SI)",      tbls.filter(x=>REF_SI(x.num))),
+    C("eq",   "Equations",        eqs),
+    C("ref",  "Citations",        cites),
+    C("sample","Samples",         samples),
+    C("abbr", "Acronyms",         abbrs),
+    C("wp",   "Work packages",    wps),
+    C("obj",  "Objectives",       objs)
+  ].filter(Boolean);
+}
+/* The tokens the current ticks amount to: one per kind, keys in printed
+   order so the range collapses the way it will read. */
+function refPickTokens(){
+  const st=modalState; if(!st) return [];
+  const byKind={};
+  st.cats.forEach(c=>c.items.forEach(it=>{
+    if(!st.picked.has(it.kind+":"+it.key)) return;
+    (byKind[it.kind]=byKind[it.kind]||[]).push(it);
+  }));
+  return Object.keys(byKind).map(kind=>{
+    const items=byKind[kind].slice();
+    if(AC_MULTI.includes(kind)) items.sort(refNumSort);
+    /* Only the cross-reference kinds carry several keys in one token; a
+       sample or an acronym is its own word and gets its own. */
+    return AC_MULTI.includes(kind)
+      ? [`[@${kind}:${items.map(x=>x.key).join(",")}]`]
+      : items.map(x=>`[@${kind}:${x.key}]`);
+  }).reduce((a,b)=>a.concat(b),[]);
+}
+function refPickText(){
+  const t=refPickTokens();
+  if(t.length<=1) return t.join("");
+  /* "Figures 1-3, S1 and S3 and Table 1" is the sort of thing a copy-editor
+     rings in red. If any one group already reads as a list, join the groups
+     with commas and leave the conjunction to the writer. */
+  const listy=t.some(tok=>{
+    try{ return / and /.test(renderInline(tok).replace(/<[^>]+>/g,"")); }catch(e){ return false; }
+  });
+  if(listy) return t.join(", ");
+  return t.slice(0,-1).join(", ")+" and "+t[t.length-1];
+}
+/* Where an insertion from a toolbar button should go: the live caret if the
+   field still has focus, otherwise the last place it was, otherwise the end —
+   never silently position zero. */
+function rememberCaret(ta){ try{ if(ta) ta.dataset.caret=String(ta.selectionStart??ta.value.length); }catch(e){} }
+function caretFor(ta){
+  if(document.activeElement===ta && ta.selectionStart!=null) return ta.selectionStart;
+  const k=ta.dataset&&ta.dataset.caret;
+  if(k!==undefined && k!=="") return Math.min(parseInt(k,10)||0, ta.value.length);
+  return ta.value.length;
+}
+function openRefPicker(ta){
+  const cats=refCategories();
+  if(!cats.length){ toast("Nothing to reference yet — add a figure, table, citation or sample first."); return; }
+  modalState={ta, at:caretFor(ta), cats, cat:cats[0].id, q:"", picked:new Set()};
+  modal("Insert references",
+    `<div class="refpick">
+       <div class="refcats" id="refCats" role="tablist" aria-label="What to reference"></div>
+       <div class="refbody">
+         <input class="inp" id="refQ" type="search" placeholder="Filter…" autocomplete="off" spellcheck="false" aria-label="Filter">
+         <ul class="lst" id="refList"></ul>
+       </div>
+     </div>`,
+    `<span class="refprev" id="refPrev"></span>
+     <button class="btn" data-close>Cancel</button>
+     <button class="btn p" id="refGo" disabled>Insert</button>`);
+  $("#refQ").oninput=e=>{ modalState.q=e.target.value; drawRefList(); };
+  drawRefCats(); drawRefList();
+  $("#refGo").onclick=()=>{
+    const text=refPickText(); if(!text) return;
+    const st=modalState, t=st.ta, at=st.at;
+    const before=t.value.slice(0,at), after=t.value.slice(at);
+    const lead = before && !/[\s([]$/.test(before) && !/^\[@ref:/.test(text) ? " " : "";
+    const trail = after && !/^[\s.,;:)\]]/.test(after) ? " " : "";
+    closeModal();
+    t.value=before+lead+text+trail+after;
+    const p=before.length+lead.length+text.length;
+    t.dispatchEvent(new Event("input",{bubbles:true}));
+    t.focus(); t.setSelectionRange(p,p);
+  };
+}
+function drawRefCats(){
+  const st=modalState, host=$("#refCats"); if(!host) return;
+  host.innerHTML=st.cats.map(c=>{
+    const n=c.items.filter(it=>st.picked.has(it.kind+":"+it.key)).length;
+    return `<button type="button" class="refcat${c.id===st.cat?" on":""}" role="tab" aria-selected="${c.id===st.cat}" data-refcat="${c.id}">
+      <span class="l">${esc(c.label)}</span><span class="n">${n?`<b>${n}</b>/`:""}${c.items.length}</span></button>`;
+  }).join("");
+  $$("#refCats [data-refcat]").forEach(b=>b.onclick=()=>{ modalState.cat=b.dataset.refcat; modalState.q=""; const q=$("#refQ"); if(q) q.value=""; drawRefCats(); drawRefList(); });
+}
+function drawRefList(){
+  const st=modalState, host=$("#refList"); if(!host) return;
+  const cat=st.cats.find(c=>c.id===st.cat)||st.cats[0];
+  const q=(st.q||"").trim();
+  /* A plain every-word-present test, not the palette's fuzzy one: a
+     three-letter query matches almost anything as a subsequence, which is
+     fine when results are ranked and useless when they are filtered. Ticked
+     rows always stay visible, so a filter can never hide a choice already
+     made. */
+  const terms=q.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown=cat.items.filter(it=>{
+    if(st.picked.has(it.kind+":"+it.key)) return true;
+    if(!terms.length) return true;
+    const hay=`${it.num} ${it.label} ${it.note||""}`.toLowerCase();
+    return terms.every(t=>hay.includes(t));
+  });
+  host.innerHTML = shown.length ? shown.map(it=>{
+    const id=it.kind+":"+it.key, on=st.picked.has(id);
+    const lead = AC_MULTI.includes(it.kind) && it.kind!=="ref" ? capLabel(it.kind==="fig"?"fig":"tbl", it.num, false) : String(it.num||"");
+    const head = it.kind==="eq" ? `Equation ${it.num}` : it.kind==="ref" ? `[${it.num||"—"}]` : lead;
+    return `<li class="${on?"sel":""}"><label style="display:flex;gap:9px;align-items:flex-start;flex:1;cursor:pointer;min-width:0">
+      <input type="checkbox" data-refpick="${esc(id)}" ${on?"checked":""} style="margin-top:3px">
+      <span style="min-width:0">
+        <span class="ttl">${esc(head)}</span>
+        <span class="meta" style="display:block;overflow:hidden;text-overflow:ellipsis">${esc(it.label||"")}${it.note&&it.kind==="ref"?` · ${esc(it.note)}`:""}</span>
+      </span></label></li>`;
+  }).join("") : `<li class="acnone">Nothing matches “${esc(q)}”</li>`;
+  $$("#refList [data-refpick]").forEach(c=>c.onchange=()=>{
+    const id=c.dataset.refpick;
+    if(c.checked) st.picked.add(id); else st.picked.delete(id);
+    c.closest("li").classList.toggle("sel",c.checked);
+    drawRefCats(); refreshRefPrev();
+  });
+  refreshRefPrev();
+}
+function refreshRefPrev(){
+  const prev=$("#refPrev"), go=$("#refGo"); if(!prev) return;
+  const text=refPickText();
+  if(!text){ prev.textContent="Nothing ticked yet"; prev.className="refprev dim"; if(go) go.disabled=true; return; }
+  let shown;
+  try{ shown=renderInline(text).replace(/<[^>]+>/g,""); }catch(e){ shown=text; }
+  /* Citation numbers come from the order of first use, so one that has not
+     been cited yet has no number to show until it is inserted. Say so rather
+     than showing an empty bracket. */
+  const pending=[...modalState.picked].some(id=>{
+    if(!id.startsWith("ref:")) return false;
+    const it=(modalState.cats.find(c=>c.id==="ref")||{items:[]}).items.find(x=>"ref:"+x.key===id);
+    return it && !it.num;
+  });
+  if(pending) shown=shown.replace(/\[\s*\]/g,"[#]");
+  prev.innerHTML=`Will insert: <b>${esc(shown.trim()||"\u2026")}</b>`
+    + (pending?` <span style="color:var(--muted)">— # is assigned when you insert it</span>`:"");
+  prev.className="refprev";
+  if(go) go.disabled=false;
+}
 /* Where the caret is, in viewport coordinates, via a mirror of the textarea. */
 function caretRect(ta,idx){
   const cs=getComputedStyle(ta), d=document.createElement("div");
@@ -6624,9 +7409,11 @@ function drawAC(){
   ac.shown=list.slice(0,12).map(x=>x.it);
   if(!ac.shown.length&&/\s/.test(ac.q)){ closeAC(); return; }
   const host=$("#acHost");
+  const foot = ac.shown.length && AC_MULTI.includes(ac.shown[ac.sel]?.kind)
+    ? `<li class="acfoot" role="presentation">Several at once — “Figs. 1–3” — from the <b>Reference…</b> button</li>` : "";
   host.innerHTML=`<ul class="ac" id="acList" role="listbox" aria-label="Insert a reference">${ac.shown.map((it,i)=>
     `<li role="option" id="acopt${i}" data-i="${i}" aria-selected="${i===ac.sel}"><span class="kind">${esc(KIND_WORD[it.kind])}</span><span class="lab">${hl(it.label,q)}</span><span class="tok">${esc(it.v)}</span></li>`).join("")
-    ||`<li class="acnone">No match — keep typing, or Esc</li>`}</ul>`;
+    ||`<li class="acnone">No match — keep typing, or Esc</li>`}${foot}</ul>`;
   const el=$("#acList"), r=caretRect(ac.ta,ac.start), w=el.offsetWidth, h=el.offsetHeight;
   let left=r.left, top=r.bottom+4;
   if(left+w>window.innerWidth-16) left=Math.max(16,window.innerWidth-16-w);
@@ -6645,13 +7432,20 @@ function acKey(e){
   if(e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); closeAC(true); return true; }
   return false;
 }
-function acPick(i){
-  const it=ac&&ac.shown[i]; if(!it) return;
+/* Kinds where one token may name several things and they print as one
+   cross-reference: "Figs. 1-3", "Tables 2 and 3", "[4,5]". A sample or an
+   acronym is one thing or another thing, so each gets its own token. */
+const AC_MULTI=["fig","tbl","eq","ref"];
+function acInsert(token,kind){
   const ta=ac.ta, end=ta.selectionStart, before=ta.value.slice(0,ac.start), after=ta.value.slice(end);
   /* A citation sits tight against the sentence; the other tokens are words. */
-  const space = it.kind!=="ref" && after && !/^[\s.,;:)\]]/.test(after) ? " " : "";
-  ta.value=before+it.v+space+after; const p=before.length+it.v.length+space.length;
+  const space = kind!=="ref" && after && !/^[\s.,;:)\]]/.test(after) ? " " : "";
+  ta.value=before+token+space+after; const p=before.length+token.length+space.length;
   closeAC(); ta.setSelectionRange(p,p); ta.dispatchEvent(new Event("input",{bubbles:true})); ta.focus();
+}
+function acPick(i){
+  const it=ac&&ac.shown[i]; if(!it) return;
+  acInsert(it.v, it.kind);
 }
 /* cancel=true means the user backed out; if the @ was put there by the Insert
    button rather than typed, take it away again. */
@@ -6795,7 +7589,7 @@ function openImportReview(){
    in the desktop edition the backend puts the real shared library on top. */
 function blankState(kind,title){
   const subdocs={}; SUBDOCS[kind].forEach(x=>subdocs[x.k]={sections:[{id:uid("s"),kind:"heading",title:x.l,blocks:[{id:uid("b"),type:"p",text:""}]}]});
-  return { kind, title, dir:"", runningHead:"", abstract:"", style:"st_afm", styleLib:seed().styleLib,
+  return { kind, title, dir:"", runningHead:"", abstract:"", lang:"en-GB", style:"st_afm", styleLib:seed().styleLib,
     authors:[], orgs:[], funding:"", keywords:[], edition:"desktop", example:false,
     me:{name:"",initials:"",colour:EDCOLOURS[0]}, sampleProps:[], samples:[], defs:[],
     glossary:false, redefineInSI:true, tables:[], attachments:[], plots:[], images:[], figures:[], refs:[],
@@ -6818,7 +7612,7 @@ function openNewDoc(){
           <div style="display:flex;gap:7px"><input class='inp mono' id='ndDir' style="flex:1" value='${esc(DESK.documentsDir)}'>
           ${DESK.folderDialog?`<button class="btn" id="ndBrowse" type="button">Browse…</button>`:""}</div></div>`+
         "<div class='note'>The document on screen stays in the vault; this opens a new one. The shared library — references, styles, samples, acronyms — is the same in both.</div>"
-      : "<div class='fld'><label>Working directory — every sub-document is a file here</label><input class='inp mono' id='ndDir' value='D:/Papers/'></div>"+
+      : "<div class='fld'><label>Working directory — every sub-document is a file here</label><input class='inp mono' id='ndDir' value='' placeholder='Documents/My paper'></div>"+
         "<div class='note w'>This replaces the document on screen. The reference library, plots and images survive — they belong to the app, not the document.</div>")+
     "</div>",
     `<button class="btn" data-close>Cancel</button><button class="btn p" id="ndGo">Create</button>`);
@@ -7107,6 +7901,23 @@ function newBlock(t){
          t==="tbl"?{id:uid("b"),type:"tbl",tblRef:(S.tables[0]||{}).ref||""} :
          t==="gantt"?{id:uid("b"),type:"gantt",caption:"Gantt chart of the work programme."} :
                    {id:uid("b"),type:"p",text:""}; }
+/* The strip says which section is under the reader, so "+ Section" at the
+   bottom of a long document is not a shot in the dark. Cheap: one observer,
+   thrown away on the next render. */
+let secObserver=null;
+function trackSectionInView(){
+  if(secObserver){ secObserver.disconnect(); secObserver=null; }
+  const out=$("#secWhere"); if(!out||typeof IntersectionObserver==="undefined") return;
+  const seen=new Map();
+  secObserver=new IntersectionObserver(entries=>{
+    entries.forEach(en=>seen.set(en.target, en.isIntersecting?en.boundingClientRect.top:Infinity));
+    let best=null, bestTop=Infinity;
+    seen.forEach((top,el)=>{ if(top<bestTop&&top!==Infinity){ bestTop=top; best=el; } });
+    const t=best&&best.querySelector("[data-sectitle]");
+    out.textContent=t?t.value:"";
+  },{rootMargin:"-80px 0px -60% 0px"});
+  $$("[data-sec]").forEach(el=>secObserver.observe(el));
+}
 function addSection(level){ const lv=level||1;
   const s={id:uid("s"),kind:"heading",level:lv,title:lv===1?"New section":lv===2?"New sub-section":"New in-line heading",blocks:[{id:uid("b"),type:"p",text:""}]};
   S.subdocs[sub].sections.push(s); commit(); reveal(`[data-sectitle="${s.id}"]`,true); const t=$(`[data-sectitle="${s.id}"]`); if(t) t.select(); }
@@ -7163,13 +7974,20 @@ function wire(){
     else { const [pre,post]=el.dataset.wrap.split("|"); wrapSel(ta,pre,post); } });
   on("[data-block]","keydown",e=>{ if(acKey(e)) return; if(fmtKey(e)) return;
     if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); const [sid,bid]=e.target.dataset.block.split("|"); addBlockAfter(sid,bid); } });
-  on("[data-block]","blur",()=>closeAC());
-  on("[data-block]","click",e=>acCheck(e.target));
+  /* Clicking a button in the block bar blurs the paragraph first, so this is
+     where the caret still means something. Without it, inserting from a
+     button lands wherever selectionStart happens to have been left. */
+  on("[data-block]","blur",e=>{ rememberCaret(e.target); closeAC(); });
+  on("[data-block]","click",e=>{ rememberCaret(e.target); acCheck(e.target); });
+  on("[data-block]","keyup",e=>rememberCaret(e.target));
   on("[data-acopen]","click",e=>{ const ta=$(`[data-block$="|${e.currentTarget.dataset.acopen}"]`); if(ta) acOpenFromButton(ta); });
+  on("[data-refpicker]","click",e=>{ const ta=$(`[data-block$="|${e.currentTarget.dataset.refpicker}"]`); if(ta) openRefPicker(ta); });
   on("[data-sectitle]","input",e=>{ const sec=S.subdocs[sub].sections.find(s=>s.id===e.target.dataset.sectitle);
     sec.title=e.target.value; save(); refreshPreview(); });
   const addSec=$("#addSec"); if(addSec) addSec.onclick=()=>addSection(1);
   const addSub=$("#addSub"); if(addSub) addSub.onclick=()=>addSection(2);
+  on("[data-addsec]","click",e=>addSection(+e.target.dataset.addsec||1));
+  trackSectionInView();
   on("[data-fold]","click",e=>{ const id=e.currentTarget.dataset.fold;
     if(ui.folded.has(id)) ui.folded.delete(id); else ui.folded.add(id);
     const sec=$(`.panel[data-sec="${id}"]`), btn=e.currentTarget, open=!ui.folded.has(id);
@@ -7327,12 +8145,20 @@ function wire(){
     const t=templateById(ts.value); if(t) applyTemplate(t,"Layout: "+t.label); };
 
   /* ---- people ---- */
-  const aa=$("#addAuthor"); if(aa) aa.onclick=()=>{ S.authors.push({id:uid("au"),name:"New Author",orgs:[],corresponding:false,equal:false,credit:[]}); commit(); };
-  const ao=$("#addOrg"); if(ao) ao.onclick=()=>{ S.orgs.push({id:uid("o"),name:"New organisation",dept:"",city:"",country:"",ror:""}); commit(); };
+  const aa=$("#addAuthor"); if(aa) aa.onclick=()=>{ S.authors.push({id:uid("au"),first:"",initials:"",last:"",name:"",orgs:[],corresponding:false,equal:false,credit:[]}); commit(); requestAnimationFrame(()=>{ const el=$$("[data-af$='|first']").pop(); if(el){ el.focus(); el.scrollIntoView({block:"nearest"}); } }); };
+  const ao=$("#addOrg"); if(ao) ao.onclick=()=>{ S.orgs.push({id:uid("o"),name:"New organisation",dept:"",city:"",postcode:"",country:"",ror:""}); commit(); };
+  const NAME_KEYS=["first","initials","last"];
   on("[data-af]","input",e=>{ const [id,k]=e.target.dataset.af.split("|"); const a=S.authors.find(x=>x.id===id);
-    a[k]= e.target.type==="checkbox"? e.target.checked : e.target.value; save(); });
+    a[k]= e.target.type==="checkbox"? e.target.checked : e.target.value;
+    if(NAME_KEYS.includes(k)) syncAuthorName(a);
+    save(); });
   on("[data-af]","change",e=>{ const [id,k]=e.target.dataset.af.split("|"); const a=S.authors.find(x=>x.id===id);
-    a[k]= e.target.type==="checkbox"? e.target.checked : e.target.value; if(k!=="name") commit(); });
+    a[k]= e.target.type==="checkbox"? e.target.checked : e.target.value;
+    /* Initials are tidied when the field is left, not while it is being typed:
+       normalising on every keystroke fights the person entering "A B". */
+    if(k==="initials") a.initials=normInitials(a.initials);
+    if(NAME_KEYS.includes(k)){ syncAuthorName(a); render(); save(); return; }
+    if(k!=="name") commit(); });
   on("[data-of]","input",e=>{ const [id,k]=e.target.dataset.of.split("|"); S.orgs.find(x=>x.id===id)[k]=e.target.value; save(); });
   on("[data-delau]","click",e=>{ S.authors=S.authors.filter(a=>a.id!==e.target.dataset.delau); commit("Author removed",{undo:true}); });
   on("[data-delorg]","click",e=>{ const id=e.target.dataset.delorg; S.orgs=S.orgs.filter(o=>o.id!==id);
@@ -7350,7 +8176,9 @@ function wire(){
     const made=libSavePerson(a); commit(made?`${a.name} saved to your library`:`${a.name} updated in your library`); });
   on("[data-saveorg]","click",e=>{ const o=S.orgs.find(x=>x.id===e.target.dataset.saveorg); if(!o) return;
     const made=libSaveOrg(o); commit(made?`${o.name} saved to your library`:`${o.name} updated in your library`); });
-  on("[data-plf]","input",e=>{ const [id,k]=e.target.dataset.plf.split("|"); const p=(S.peopleLib||[]).find(x=>x.id===id); if(p){ p[k]=e.target.value; save(); } });
+  on("[data-plf]","input",e=>{ const [id,k]=e.target.dataset.plf.split("|"); const p=(S.peopleLib||[]).find(x=>x.id===id);
+    if(p){ p[k]=e.target.value; if(["first","initials","last"].includes(k)) p.name=authorName(p); save(); } });
+  const lbe=$("#libEditToggle"); if(lbe) lbe.onclick=()=>{ ui.libEdit=!ui.libEdit; render(); };
   on("[data-olf]","input",e=>{ const [id,k]=e.target.dataset.olf.split("|"); const o=(S.orgLib||[]).find(x=>x.id===id); if(o){ o[k]=e.target.value; save(); } });
   on("[data-pldel]","click",e=>{ const id=e.target.dataset.pldel, p=(S.peopleLib||[]).find(x=>x.id===id);
     S.peopleLib=(S.peopleLib||[]).filter(x=>x.id!==id); commit(`${p?p.name:"Person"} removed from your library`,{undo:true}); });
@@ -7362,7 +8190,7 @@ function wire(){
     docOrgFor(o); commit(`${o.name} added`,{undo:true}); });
   const flp=$("#fromLibPeople"); if(flp) flp.onclick=()=>{ const P=S.peopleLib||[];
     modal("Add from your library", P.length?`<ul class="lst">${P.map(p=>`<li><div class="grow stack" style="gap:4px">
-        <div class="ttl">${esc(p.name||"(unnamed)")}</div>
+        <div class="ttl">${esc(authorName(p)||"(unnamed)")}</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">${(p.orgs||[]).length?(p.orgs||[]).map(s=>`<span class="chip">${esc(s.name||"—")}</span>`).join(""):`<span class="chip warn">no saved organisations</span>`}</div>
       </div><div class="acts"><button class="btn sm p" data-pickpers="${p.id}">Add</button></div></li>`).join("")}</ul>`
       :`<div class="empty">Your library is empty. <b>Save to library</b> on an author puts them here.</div>`,
@@ -7373,7 +8201,7 @@ function wire(){
   const flo=$("#fromLibOrgs"); if(flo) flo.onclick=()=>{ const O=S.orgLib||[];
     modal("Add an organisation from your library", O.length?`<ul class="lst">${O.map(o=>`<li><div class="grow stack" style="gap:4px">
         <div class="ttl">${esc(o.name||"(unnamed)")}</div>
-        <div class="meta">${esc([o.dept,o.city,o.country].filter(Boolean).join(", "))||"—"}</div>
+        <div class="meta">${esc([o.dept,[o.city,o.postcode].filter(Boolean).join(" "),o.country].filter(Boolean).join(", "))||"—"}</div>
       </div><div class="acts"><button class="btn sm p" data-pickorg="${o.id}">Add</button></div></li>`).join("")}</ul>`
       :`<div class="empty">No organisations saved yet.</div>`,
       `<button class="btn" data-close>Close</button>`);
@@ -7409,7 +8237,7 @@ function wire(){
   on("[data-cmt]","click",e=>{ const r=S.revisions.find(x=>x.id===e.target.dataset.cmt);
     modal("Comment on “"+r.label+"”",`<div class="fld"><label>Comment</label><textarea class="inp" id="cmTx" rows="4"></textarea></div>`,
       `<button class="btn" data-close>Cancel</button><button class="btn p" id="cmGo">Add</button>`);
-    $("#cmGo").onclick=()=>{ (r.comments=r.comments||[]).push({by:"Mark Isaacs",at:nowISO(),text:$("#cmTx").value}); closeModal(); commit("Comment added"); }; });
+    $("#cmGo").onclick=()=>{ (r.comments=r.comments||[]).push({by:(S.me&&S.me.name)||"Unnamed editor",at:nowISO(),text:$("#cmTx").value}); closeModal(); commit("Comment added"); }; });
   const ec=$("#expClean"); if(ec) ec.onclick=()=>openExport(false);
   const et=$("#expTracked"); if(et) et.onclick=()=>openExport(true);
 
@@ -7860,6 +8688,7 @@ async function boot(){
   }
   migrate();
   refKeyMap();
+  wireContextMenu();
   render();
   histReset();
   if(DESK.online){
@@ -7889,7 +8718,19 @@ function migrate(){
     if(!Array.isArray(a.orgs)) a.orgs = (typeof a.org==="string"&&a.org) ? [a.org] : [];
     delete a.org;
     if(!Array.isArray(a.credit)) a.credit=[];
+    /* An author used to be one `name` string. Split it once, keeping `name`
+       in step, so a document written before the byline understood name order
+       gains the parts without the person retyping anybody. */
+    if(a.last===undefined && a.first===undefined){
+      const np=parsePersonName(a.name); a.first=np.first; a.initials=np.initials; a.last=np.last;
+      syncAuthorName(a);
+    }
   });
+  (S.peopleLib||[]).forEach(p=>{ if(p.last===undefined && p.first===undefined){
+    const np=parsePersonName(p.name); p.first=np.first; p.initials=np.initials; p.last=np.last; p.name=authorName(p); } });
+  /* Organisations gained a postcode; an older one simply has none. */
+  (S.orgs||[]).forEach(o=>{ if(o.postcode===undefined) o.postcode=""; });
+  (S.orgLib||[]).forEach(o=>{ if(o.postcode===undefined) o.postcode=""; });
   /* Saved people and organisations are app-scoped (store.LIBRARY_KEYS) and
      start empty in both editions — never back-filled from the example. */
   if(!Array.isArray(S.peopleLib)) S.peopleLib=[];
@@ -7906,6 +8747,10 @@ function migrate(){
   if(!S.edition) S.edition="desktop";
   if(S.example===undefined) S.example=false;
   if(S.dir===undefined) S.dir="";
+  /* The language a document is written in. Existing documents were written
+     against the browser's default, which on this machine is British English;
+     saying so is closer to the truth than leaving it unset. */
+  if(!S.lang) S.lang="en-GB";
   if(S.depositAt===undefined) S.depositAt="";
   if(S.templateId===undefined) S.templateId=null;
   if(S.glossary===undefined) S.glossary=false;
@@ -7940,7 +8785,7 @@ function isEditing(el){ return !!el&&(el.tagName==="TEXTAREA"||(el.tagName==="IN
 /* ---- credit bar: support link and About ----
    The desktop backend may inject window.__DESK_PROFILE from profile.json;
    opened on its own the page falls back to the placeholder below. */
-const APP_VERSION="1.0.0";
+const APP_VERSION="1.1.0";
 /* The backend reports the version it is actually running; standalone, the
    constant above is the whole truth. */
 function appVersion(){ try{ return (DESK.info&&DESK.info.version)||APP_VERSION; }catch(e){ return APP_VERSION; } }

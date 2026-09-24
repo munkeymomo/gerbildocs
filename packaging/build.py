@@ -168,7 +168,7 @@ def main() -> int:
         print(f"\ninstaller: {setup}  {setup.stat().st_size:,} bytes")
 
     print("\nUnsigned builds trip SmartScreen on other people's machines — budget for a\n"
-          "code-signing certificate before this goes to the centres.")
+          "code-signing certificate before this goes out widely.")
     return 0
 
 

@@ -19,8 +19,13 @@ locked `.exe`):
 ```
 .venv\Scripts\python.exe -m pytest -q
 .venv\Scripts\python.exe -m app.selfcheck
-.venv\Scripts\python.exe tools\make_release.py
+.venv\Scripts\python.exe tools\make_release.py --install "..\GerbilDocs"
 ```
+
+`--install` copies the built application over the folder you actually run it
+from. Without it the build lands in `dist/` only, the copy on the desktop goes
+on being the old one, and the next thing you notice is a bug in a version that
+no longer exists. Leave the flag off only when building for somebody else.
 
 That leaves `release/<version>/`:
 

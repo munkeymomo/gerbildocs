@@ -2,6 +2,7 @@
 
     python tools/make_release.py                 # build everything
     python tools/make_release.py --skip-build    # reuse the existing dist/ bundle
+    python tools/make_release.py --install DIR   # ...and refresh the copy you run
 
 It produces three files and a checksum list:
 
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -104,11 +106,38 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def install(target: Path) -> None:
+    """Copy the freshly built application over the folder that is actually run.
+
+    Building leaves the application in `dist/`, which is not where anyone runs
+    it from; the copy on the desktop or the network share goes on being the
+    old one, silently, and the next bug report is about a version that no
+    longer exists. This is the step that closes that gap, and it is worth one
+    flag to make it hard to forget.
+    """
+    src = DIST / "GerbilDocs"
+    if not src.is_dir():
+        raise SystemExit(f"nothing to install: {src} does not exist")
+    target = target.resolve()
+    if target == src:
+        raise SystemExit("--install target is the build output itself")
+    if target.exists() and not (target / "GerbilDocs.exe").exists():
+        # Refuse to pour an application into somebody's documents folder.
+        raise SystemExit(f"{target} is not a GerbilDocs installation "
+                         "(no GerbilDocs.exe); refusing to overwrite it")
+    print(f"\ninstalling into {target}")
+    shutil.copytree(src, target, dirs_exist_ok=True)
+    print(f"  {target / 'GerbilDocs.exe'}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--skip-build", action="store_true",
                     help="reuse the bundle already in dist/ instead of rebuilding")
+    ap.add_argument("--install", metavar="DIR",
+                    help="also copy the built application over an existing "
+                         "installation, so the copy you run is the one you built")
     args = ap.parse_args()
 
     ver = version()
@@ -154,6 +183,8 @@ def main() -> int:
     print("\nSource archive leaves out, on purpose:")
     for name in sorted(PRIVATE):
         print(f"  {name}")
+    if args.install:
+        install(Path(args.install))
     return 0
 
 

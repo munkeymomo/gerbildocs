@@ -1,6 +1,6 @@
 [project]
 name = "gerbildocs"
-version = "1.0.0"
+version = "1.1.0"
 description = "Write papers, reports and grants as folders of reusable, id-referenced content."
 requires-python = ">=3.11"
 authors = [{ name = "Mark Isaacs" }]

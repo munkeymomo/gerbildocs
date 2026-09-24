@@ -247,6 +247,29 @@ def main() -> int:
         check("injects the token into the page", settings.token in html)
         check("marks the page as the desktop edition", '__DESK_EDITION="desktop"' in html)
 
+        # The interface is one file with no build step, so the only way to
+        # notice a feature being deleted from it is to look.
+        for name, needle in [
+            ("cross-references can name several things", "function joinRefNums"),
+            ("several can be picked at once", "function openRefPicker"),
+            ("author names are held in parts", "const NAME_STYLES"),
+            ("the document has a language", "function applyLang"),
+            ("British/American variants are checked", "function variantFor"),
+            ("there is a right-click menu", "function wireContextMenu"),
+            ("sections can be added without scrolling", 'class="secbar"'),
+            ("AVS has a submission template", 'id:"tpl_avs_submit"'),
+            ("organisations have a postcode", "function orgAddress"),
+        ]:
+            check(name, needle in html, needle)
+
+        # The example document ships to strangers. Nobody's name, employer or
+        # research topic belongs in it; the credit line in the header is the
+        # one place a person is named on purpose.
+        leaked = [w for w in ("HarwellXPS", "UCL", "SBA-15", "Parlett", "ucl.ac.uk")
+                  if w in html]
+        check("the example names nobody and nothing real", not leaked, ", ".join(leaked))
+        check("the credit line is still there", "Created by <b>Dr Mark Isaacs</b>" in html)
+
         r = client.get("/api/openapi.json", headers=auth)
         check("publishes an OpenAPI schema", r.status_code == 200 and "paths" in r.json())
 
