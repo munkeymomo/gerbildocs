@@ -92,7 +92,7 @@ def _doc():
     return {
         "kind": "publication",
         "title": "Sub-monolayer titania",
-        "authors": [{"name": "Mark Isaacs"}, {"name": "Arthur Graf"}],
+        "authors": [{"name": "Jane Doe"}, {"name": "Richard Roe"}],
         "figures": [{"ref": "F1"}],
         "tables": [{"ref": "T1"}],
         "repo": "Zenodo",

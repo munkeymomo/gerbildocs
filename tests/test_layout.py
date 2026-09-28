@@ -20,6 +20,70 @@ def test_subdoc_filenames_follow_the_kind():
     assert layout.subdoc_filename("publication", "manuscript", "pdf") == "manuscript.pdf"
 
 
+def _grant(parts=None, subdocs=None):
+    doc = {"kind": "grant", "title": "A grant", "subdocs": subdocs or {}}
+    if parts is not None:
+        doc["grantParts"] = parts
+    return doc
+
+
+def test_a_grant_names_its_exports_after_its_own_parts():
+    doc = _grant([
+        {"k": "g_sum0001", "l": "Summary", "mode": "textbox", "words": 550},
+        {"k": "g_va00001", "l": "Vision and Approach", "mode": "attachment", "pages": 6},
+        {"k": "g_team001", "l": "Applicant and team capability to deliver", "mode": "textbox"},
+    ])
+    assert layout.subdoc_filename(doc, "g_va00001") == "vision-and-approach.docx"
+    assert layout.subdoc_filename(doc, "g_sum0001", "pdf") == "summary.pdf"
+    paths = [p.path for p in layout.plan_document(doc)]
+    exports = [p for p in paths if p.endswith(".docx")]
+    # One export per part, in the application's order, and nothing from the
+    # fixed grant list the parts replaced.
+    assert exports == ["summary.docx", "vision-and-approach.docx",
+                       "applicant-and-team-capability-to-deliver.docx"]
+    assert "case-for-support.docx" not in paths
+
+
+def test_a_grant_written_before_parts_keeps_its_four_files():
+    doc = _grant()
+    assert layout.subdocs_for(doc) == layout.SUBDOCS["grant"]
+    paths = [p.path for p in layout.plan_document(doc)]
+    for expected in ("case-for-support.docx", "justification-of-resources.docx",
+                     "summary-impact.docx", "data-management.docx"):
+        assert expected in paths
+    # An empty list is not a definition either: fall back rather than plan nothing.
+    assert layout.subdoc_filename(_grant([]), "manuscript") == "case-for-support.docx"
+
+
+def test_parts_are_read_only_for_grants():
+    """A publication carrying a stray `grantParts` still has its own four files."""
+    doc = {"kind": "publication", "grantParts": [{"k": "g_x", "l": "Odd one out"}]}
+    assert [k for k, _ in layout.subdocs_for(doc)] == ["manuscript", "si", "cover", "dmp"]
+    assert layout.subdoc_filename(doc, "si") == "supporting-information.docx"
+
+
+def test_two_parts_with_one_name_do_not_share_a_file():
+    doc = _grant([{"k": "g_a", "l": "New part"}, {"k": "g_b", "l": "New part"},
+                  {"k": "g_c", "l": "New part"}])
+    assert layout.subdoc_filenames(doc) == {"g_a": "new-part.docx", "g_b": "new-part-2.docx",
+                                           "g_c": "new-part-3.docx"}
+
+
+def test_a_part_with_no_name_is_filed_under_its_key():
+    """The interface does the same (`subdocFilenames`), so the two plans agree."""
+    doc = _grant([{"k": "g_first", "l": ""}, {"k": "g_second", "l": "   "}])
+    assert layout.subdoc_filenames(doc) == {"g_first": "g-first.docx", "g_second": "untitled.docx"}
+
+
+def test_a_grant_orders_equations_by_its_parts_not_by_the_dict():
+    doc = _grant(
+        [{"k": "g_first", "l": "Vision and Approach"}, {"k": "g_second", "l": "Summary"}],
+        {"g_second": {"sections": [{"blocks": [{"type": "eq", "latex": "later"}]}]},
+         "g_first": {"sections": [{"blocks": [{"type": "eq", "latex": "earlier"}]}]}},
+    )
+    assert [e["latex"] for e in layout.equations_in_order(doc)] == ["earlier", "later"]
+
+
 def test_figure_and_table_folders_are_zero_padded():
     assert layout.figure_dir(1) == "figures/figure-01"
     assert layout.figure_dir(12) == "figures/figure-12"
@@ -56,7 +120,7 @@ def _doc():
             {"name": "spectra.vms", "target": "F1"},
             {"name": "isotherms.xlsx", "target": "T1"},
         ],
-        "revisions": [{"label": "First full draft", "by": "Mark Isaacs"}],
+        "revisions": [{"label": "First full draft", "by": "Jane Doe"}],
         "reviews": [{"reviewer": "Reviewer 1", "comments": []}],
     }
 

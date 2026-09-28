@@ -26,6 +26,24 @@ def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"  {'ok  ' if ok else 'FAIL'}  {name}{'  — ' + detail if detail and not ok else ''}")
 
 
+# Names from the design documents, and the product's old name, are for the
+# people building it. The selfcheck cannot run the page, so it reads it with
+# its comments taken out: what is left is markup, code and the strings a user
+# can be shown, and a name found there is one a user could see.
+INTERNAL_NAMES = ("MODEL-0", "ADR-W", "ARCH-W", "VISION-0", "ROADMAP-W", "PLUGIN-0",
+                  "HANDOFF", "Workbench", "Document Desk", "the Desk ", "TSB-")
+
+
+def without_comments(html: str) -> str:
+    """The page less its comments: HTML comments, block comments in scripts and
+    styles, and line comments at the start of a line or after a space. A block
+    comment cannot follow a word character or a quote, so `accept="image/*"`
+    is not one; a `//` in a URL follows a colon, so it stays."""
+    s = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    s = re.sub(r"(?<![\w\"'/*])/\*.*?\*/", "", s, flags=re.S)
+    return re.sub(r"(^|[\s;{}])//[^\n]*", r"\1", s, flags=re.M)
+
+
 def main() -> int:
     try:
         from fastapi.testclient import TestClient
@@ -183,7 +201,7 @@ def main() -> int:
                   "deposit comprises 1 files" in r.json()["deposit"]["statement"])
 
         r = client.post(f"/api/documents/{doc['id']}/revisions", headers=auth,
-                        json={"revision": {"label": "First full draft", "by": "Mark Isaacs",
+                        json={"revision": {"label": "First full draft", "by": "Jane Doe",
                                            "snapshot": {"subdocs": {}}}})
         check("writes a revision to drafts/",
               r.status_code == 201 and (root / "drafts/rev-01-first-full-draft.json").exists(),
@@ -242,6 +260,47 @@ def main() -> int:
         check("library is mirrored to disk as JSON",
               (settings.paths.library / "refs.json").exists(), str(settings.paths.library))
 
+        # An imported style file lands in two sets that are already app-scoped,
+        # templates and styleLib; a grant format rides on its template. The
+        # desktop interface saves the whole state and the vault splits the
+        # library off, so check that path keeps both and hands them to the
+        # next document — and that the exported file itself can be written
+        # into the document folder, which is where the desktop edition saves it.
+        imported = {"id": "tpl_sfcheck", "family": "My templates", "label": "Imported grant format",
+                    "kind": "grant", "mine": True, "style": "compact", "styleId": "st_sfcheck",
+                    "sections": [], "statements": [], "notes": [], "format": {"columns": 1},
+                    "page": {"header": {}, "footer": {}, "pageNumbers": True, "numberIn": "footer-right"},
+                    "imported": {"file": "office.gerbilstyle"},
+                    "grantFormat": {"parts": [{"l": "Case for support", "mode": "attachment", "pages": 6}],
+                                    "refs": {"mode": "inline", "part": None, "style": "st_sfcheck"},
+                                    "form": []}}
+        current = client.get(f"/api/documents/{doc['id']}", headers=auth).json()["state"]
+        current["templates"] = (current.get("templates") or []) + [imported]
+        current["styleLib"] = (current.get("styleLib") or []) + [
+            {"id": "st_sfcheck", "label": "Office compact", "base": "compact", "abstractLimit": 250,
+             "doi": False, "source": "from a style file"}]
+        client.put(f"/api/documents/{doc['id']}", headers=auth, json={"state": current})
+        lib = client.get("/api/library", headers=auth).json()["library"]
+        check("an imported template, its grant format and its style are kept in the library",
+              any(t.get("id") == "tpl_sfcheck" and t.get("grantFormat", {}).get("parts")
+                  for t in lib.get("templates") or [])
+              and any(s.get("id") == "st_sfcheck" for s in lib.get("styleLib") or []))
+        check("the imported template is mirrored to disk",
+              "tpl_sfcheck" in (settings.paths.library / "templates.json").read_text("utf-8")
+              if (settings.paths.library / "templates.json").exists() else False)
+        r = client.post("/api/documents", headers=auth,
+                        json={"title": "From an imported format", "kind": "grant",
+                              "state": {"kind": "grant", "title": "From an imported format"}})
+        fresh = r.json().get("state", {}) if r.status_code == 201 else {}
+        check("a new document is given the imported template and style",
+              any(t.get("id") == "tpl_sfcheck" for t in fresh.get("templates") or [])
+              and any(s.get("id") == "st_sfcheck" for s in fresh.get("styleLib") or []))
+        r = client.post(f"/api/documents/{doc['id']}/files", headers=auth,
+                        json={"relative": "office-format.gerbilstyle",
+                              "text": '{"gerbildocs":"style","version":1}'})
+        check("a style file is written into the document folder",
+              r.status_code == 200 and (root / "office-format.gerbilstyle").exists(), r.text[:160])
+
         r = client.get("/")
         html = r.text
         check("serves the interface", r.status_code == 200 and len(html) > 100_000, str(len(html)))
@@ -262,8 +321,181 @@ def main() -> int:
             ("sections can be added without scrolling", 'class="secbar"'),
             ("AVS has a submission template", 'id:"tpl_avs_submit"'),
             ("organisations have a postcode", "function orgAddress"),
+            ("Gantt header labels are stepped so they cannot collide", "function ganttLabelStep"),
+            ("Gantt labels are fitted with an ellipsis and a hover title", "function ganttLabel"),
+            ("every caption field offers the same Reference… picker as a paragraph", 'id="pCapRef"'),
+            ("a citation used only in a caption is still numbered and listed", "grab(b.caption)"),
         ]:
             check(name, needle in html, needle)
+
+        # Plots: datasets, stacking, error bars, annotations, palettes. Same
+        # guard as above — a feature deleted from the one interface file can
+        # only be noticed by looking for it.
+        for name, needle in [
+            ("plots hold datasets, migrated from the old flat series", "function migratePlot"),
+            ("plot data is edited as datasets", "function drawPlotData"),
+            ("a dataset splits into one per column, and datasets merge", "function pdmMerge"),
+            ("plots stack datasets with an offset", "offsetPct"),
+            ("plots normalise per dataset or per column", "function normLin"),
+            ("plots carry error bars, including custom values", "function errLookup"),
+            ("plots can be drawn on", "function annSVG"),
+            ("plots offer palettes and a full colour picker", "const PALETTES"),
+            ("a dataset can be named by a linked sample", "function dsLabel"),
+            ("a plot can have a right-hand axis", "y2Axis"),
+            # Figures: every panel is drawn at its printed size, complete, and
+            # Word and the deposit place the same grid the pages print.
+            ("figure panels are sized in points from the page", "function figGeom"),
+            ("a panel's type is laid out at its printed size", "fit:true"),
+            ("Word places each figure as the pages set it", "figureGridSVG(f)"),
+            ("a figure of one panel carries no letter and no \"(a)\"", "Journals do not letter a figure of one panel"),
+        ]:
+            check(name, needle in html, needle)
+        check("no figure panel is drawn as a thumbnail (no axis titles or legend)",
+              "thumb:true" not in html)
+
+        # Samples in plots, and uncertainty on sample properties: a dataset
+        # can be the samples themselves, held by reference and read live.
+        for name, needle in [
+            ("a plot dataset can come from samples, by reference", "function isSampleDs"),
+            ("sample datasets are read live through one resolver", "function plotView"),
+            ("the renderer reads every plot through the resolver", "p=plotView(p);"),
+            ("plots draw x error bars", "function errLookupX"),
+            ("points can be labelled by their sample", "d.pointLabels"),
+            ("the data manager edits a dataset made from samples", "function sdsGridHTML"),
+            ("a sample property can carry an uncertainty", "const PROP_ERR"),
+            ("'2.1 ± 0.3', '2.1+-0.3' and '2.1 (0.3)' are a value and its uncertainty",
+             "function parseValErr"),
+            ("a sample table prints ±, concise brackets, or neither", "const TBL_UNCERT"),
+            ("a table's CSV gives each uncertainty a column of its own",
+             "tableCells(t,{csv:true})"),
+            ("a sample or property a plot uses is not deleted from under it",
+             "function plotsUsingSample"),
+            ("measurements pasted onto samples become typed columns in one step",
+             "function measParse"),
+            ("a header that names an uncertainty attaches as the ± of the column before",
+             "function measIsErrHead"),
+            ("headerless value and ± pairs are guessed from the numbers", "function measGuessPairs"),
+            ("a pasted block wider than the typed columns makes more", "while(slots.length<P.ncols)"),
+            ("pasted data reads numbers as samples do (no prefix, a decimal comma)",
+             "const num=propNum;"),
+            ("the pasted grid says which cells are not numbers", "function pdmNumIssues"),
+        ]:
+            check(name, needle in html, needle)
+
+        # Grants: a grant is made of the funder's parts, each with its limits,
+        # and says so in one file, so the only guard is looking.
+        for name, needle in [
+            ("a grant's sub-documents are its own parts", "function subdocsOf"),
+            ("grant parts have a structure view", "function vGrant"),
+            ("funders' formats are presets", "const GRANT_FORMATS"),
+            ("the EPSRC standard research grant is a preset", 'id:"epsrc_std"'),
+            ("an old grant becomes the legacy four parts", 'id:"legacy"'),
+            ("a part's words are counted as they would be pasted", "function partPlain"),
+            ("a text box part is copied for the form", "function copyForForm"),
+            ("references print in one part, or in each", "function partBib"),
+            ("a compact reference style saves words", "function compactBib"),
+            ("the Funding Service attachment has its own layout", 'id:"tpl_epsrc_fs"'),
+            ("a grant part prints no title, byline or abstract", "function previewGrantPart"),
+            ("attachment parts are counted in real pages", "function partPages"),
+        ]:
+            check(name, needle in html, needle)
+
+        # Style files: a layout, and for a grant the funder's structure, saved
+        # as one file and imported into My templates. Same guard as above.
+        for name, needle in [
+            ("a style file is read through a whitelist", "function readStyleText"),
+            ("a newer style file version is refused", "SF_VERSION"),
+            ("a style file's logo must be an embedded raster image", "SF_LOGO_RE"),
+            ("a style file is written from what the reader accepts", "function sfBundleToFile"),
+            ("any template can be exported as a style file", "data-tplexport"),
+            ("the Formatting view exports its formatting", 'id="sfExportFmt"'),
+            ("Application parts exports the grant's format", 'id="sfExportGrant"'),
+            ("style files are imported from Templates", 'id="sfImport"'),
+            ("style files are imported from Application parts", 'id="sfImportGrant"'),
+            ("an import is previewed before anything changes", "function openStyleImport"),
+            ("imported grant formats are offered with the built-in presets",
+             "function grantFormatOptions"),
+            ("a preset is found among the user's own formats too", "||userGrantFormat(id)||"),
+            # From the review of the merged tree: a key or font named like an
+            # Object member, layouts that do not fit the page, a template
+            # deleted from under a document, and a browser whose storage fills.
+            ("fonts are looked up as own keys", "Object.prototype.hasOwnProperty.call(FONT_STACKS,k)"),
+            ("form answers are read as the document's own", "Object.assign(Object.create(null),formAnswers())"),
+            ("a resolved format is fitted to its page", "function fitFormatToPage"),
+            ("migrate() mends fonts and colours an older build let in", "repairLayouts();"),
+            ("a document keeps the layout of a template deleted from under it",
+             "S.keptLayout.id === id ? S.keptLayout"),
+            ("deleting a template in use asks first", "function deleteUserTemplate"),
+            ("an import checks the browser has room for it", "function storageHasRoom"),
+            ("a save the browser cannot hold says so", "storageFailed(e)"),
+        ]:
+            check(name, needle in html, needle)
+
+        # Citation styles: a journal's own CSL or BibTeX style, imported into
+        # the library. Same guard as above.
+        for name, needle in [
+            ("CSL styles run on the page's own processor", "function cslParse"),
+            ("a CSL style declaring a DOCTYPE or entities is refused",
+             "(<!DOCTYPE>/<!ENTITY>)"),
+            ("styleOf resolves an imported style", "const c=citeStyleOf(e); if(c) return c;"),
+            ("a dependent CSL style stands in with the nearest built-in shape",
+             "const CSL_PARENT_SHAPES"),
+            ("a list style that sorts sets the order and the numbers",
+             "return citeStyleOrder(nums);"),
+            ("an imported style prints its own in-text citations", "S.citeText(refs,nums,all)"),
+            ("an imported style sets its own list on the page and in exports",
+             "function bibListHTML"),
+            ("an imported style sets its own list in Word", "function bibDocxParas"),
+            ("an imported style's plain-text list counts its own numbers",
+             "function bibPlainLines"),
+            ("small caps reach Word", "<w:smallCaps/>"),
+            ("a style is previewed before it is added", "function styleImportPreview"),
+            ("the BibTeX engine has its own block", "function bstParse"),
+            ("a style file carries an imported style's source", "citeRefOut(e,o)"),
+            ("the citation-style rules are one block of the stylesheet",
+             "/* ---- citation styles: CSL and BibTeX ---- */"),
+            # From the review of the merged tree: a style that loops or blows up
+            # its macros, one that names Object's members, and a library an
+            # earlier build let such a style into.
+            ("macro loops and blow-ups are refused before a style runs",
+             "function cslMacroCost"),
+            ("every step of the CSL engine spends from a budget", "cslSpend(this);"),
+            ("a term's form is one CSL defines", "CSL_TERM_FORMS.includes(form)"),
+            ("a stored style is held to today's checks when the page loads",
+             'if(e.base==="csl"){ const P=citeParse("csl",src);'),
+            ("one style cannot take the Style library down", "function citeSafe"),
+        ]:
+            check(name, needle in html, needle)
+
+        # A kind alone plans a grant with no parts: the legacy four. A saved
+        # grant's tree is named after its own parts.
+        r = client.get("/api/layout/preview", params={"kind": "grant"}, headers=auth)
+        paths = [n["path"] for n in r.json().get("nodes", [])] if r.status_code == 200 else []
+        check("a grant with no parts yet plans the legacy four exports",
+              "case-for-support.docx" in paths and "summary-impact.docx" in paths, str(paths[:6]))
+        parts = [{"k": "g_sum", "l": "Summary", "mode": "textbox"},
+                 {"k": "g_va", "l": "Vision and Approach", "mode": "attachment"}]
+        r = client.post("/api/documents", headers=auth,
+                        json={"title": "Parts grant", "kind": "grant",
+                              "state": {"kind": "grant", "title": "Parts grant",
+                                        "grantParts": parts}})
+        gid = r.json().get("id") if r.status_code == 201 else None
+        tree = client.get(f"/api/documents/{gid}/tree", headers=auth).json() if gid else {}
+        tpaths = [n["path"] for n in tree.get("nodes", [])]
+        check("a saved grant's tree names its exports after its parts",
+              "vision-and-approach.docx" in tpaths and "case-for-support.docx" not in tpaths,
+              str([p for p in tpaths if p.endswith(".docx")]))
+
+        # The fixed sub-document table is written twice, here and in layout.py;
+        # the export names the interface draws are only right if they agree.
+        from app.services.layout import SUBDOCS as LAYOUT_SUBDOCS
+        m = re.search(r"const SUBDOCS = \{(.*?)\n\};", html, re.S)
+        page_subdocs = {}
+        for kind, body in re.findall(r"(\w+):\[(.*?)\]", m.group(1) if m else ""):
+            page_subdocs[kind] = re.findall(r'\{k:"([^"]+)",l:"([^"]+)"\}', body)
+        check("the interface's sub-documents match layout.py's",
+              page_subdocs == {k: list(v) for k, v in LAYOUT_SUBDOCS.items()},
+              str(page_subdocs))
 
         # The interface keeps its own copy of LIBRARY_KEYS, and a key present
         # in one list and not the other is how a new document silently wipes
@@ -284,6 +516,13 @@ def main() -> int:
                   if w in html]
         check("the example names nobody and nothing real", not leaked, ", ".join(leaked))
         check("the credit line is still there", "Created by <b>Dr Mark Isaacs</b>" in html)
+        shown = without_comments(html)
+        internal = [w for w in INTERNAL_NAMES if w in shown]
+        check("the interface shows no internal design names or the old product name",
+              not internal, ", ".join(internal))
+        check("taking the comments out leaves the interface's own text",
+              shown.count('class="note') == html.count('class="note')
+              and shown.count("placeholder=") == html.count("placeholder="))
 
         r = client.get("/api/openapi.json", headers=auth)
         check("publishes an OpenAPI schema", r.status_code == 200 and "paths" in r.json())

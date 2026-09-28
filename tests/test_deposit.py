@@ -16,7 +16,7 @@ def _state():
     return {
         "kind": "publication",
         "title": "Sub-monolayer titania on SBA-15",
-        "authors": [{"name": "Mark Isaacs"}, {"name": "Chris Parlett"}],
+        "authors": [{"name": "Jane Doe"}, {"name": "Richard Roe"}],
         "repo": "Zenodo",
         "datasetDoi": "10.5281/zenodo.0000000",
         "figures": [{"ref": "F1", "panels": [{"src": "pl_1"}, {"src": None}]}],
@@ -84,7 +84,7 @@ def test_the_readme_lists_every_file_it_wrote(tmp_path):
     ws, summary = _compile(tmp_path)
     readme = (ws.root / "DEPOSIT.md").read_text("utf-8")
     assert "Sub-monolayer titania on SBA-15" in readme
-    assert "Mark Isaacs, Chris Parlett" in readme
+    assert "Jane Doe, Richard Roe" in readme
     for rel in summary["written"]:
         if rel != "DEPOSIT.md":
             assert rel in readme, f"{rel} is missing from DEPOSIT.md"
@@ -126,3 +126,29 @@ def test_a_path_escape_in_a_reference_is_refused(tmp_path):
     with pytest.raises(PathEscape):
         compile_deposit(ws, _state(), {"plots": [{"ref": "../../../evil", "csv": "x\n1\n"}]})
     assert not (tmp_path / "evil.csv").exists()
+
+
+def test_a_plot_made_from_samples_is_deposited_as_references_and_numbers(tmp_path):
+    """A sample dataset's specification holds references (which samples, which
+    properties); the numbers it resolved to travel in the CSV, each uncertainty
+    in its own column. Both land exactly as handed over."""
+    import json
+    source = {"kind": "samples", "sampleIds": ["sm_1", "sm_2"],
+              "x": {"kind": "prop", "prop": "pd_fe", "err": "prop"},
+              "cols": [{"kind": "prop", "prop": "pd_f3", "err": "prop"},
+                       {"kind": "typed", "values": {"sm_1": 0.12}, "err": {"sm_1": 0.02}}]}
+    spec = {"id": "pl_1", "ref": "P1", "chartType": "line",
+            "datasets": [{"id": "ds_1", "name": "Fe series", "source": source,
+                          "pointLabels": True}],
+            "series": [{"name": "Fe3+ fraction", "ds": "ds_1", "col": 0},
+                       {"name": "Rate", "ds": "ds_1", "col": 1}]}
+    csv = ("Sample,Fe / at.%,Fe / at.% SD,Fe3+ fraction,Fe3+ fraction SD,Rate,Rate ± error\n"
+           "FE-300,2.1,0.3,0.42,0.04,0.12,0.02\nFE-500,5.4,0.5,0.55,0.05,,\n")
+    rendered = _rendered()
+    rendered["plots"] = [{"ref": "P1", "csv": csv, "spec": spec}]
+    ws = Workspace(tmp_path / "doc")
+    compile_deposit(ws, _state(), rendered)
+    written = json.loads((ws.root / "figures/figure-01/pl_1.plotspec.json").read_text("utf-8"))
+    assert written["datasets"][0]["source"] == source
+    assert all("x" not in s and "y" not in s for s in written["series"])
+    assert (ws.root / "plots/P1.csv").read_text("utf-8") == csv

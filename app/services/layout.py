@@ -21,6 +21,8 @@ __all__ = [
     "slug",
     "pad2",
     "SUBDOCS",
+    "subdocs_for",
+    "subdoc_filenames",
     "subdoc_filename",
     "figure_dir",
     "table_dir",
@@ -85,11 +87,58 @@ def document_root_name(title: str) -> str:
     return slug(title, max_len=48)
 
 
-def subdoc_filename(kind: str, subdoc_key: str, ext: str = "docx") -> str:
-    """`manuscript.docx`, `supporting-information.docx`, and so on."""
-    for key, label in SUBDOCS.get(kind, SUBDOCS["publication"]):
-        if key == subdoc_key:
-            return f"{slug(label)}.{ext}"
+def subdocs_for(document: dict) -> list[tuple[str, str]]:
+    """The sub-documents a document is made of, as (key, label), in order.
+
+    A grant defines its own: `grantParts` is the application's list of parts,
+    in the order the funder asks for them, and each part is a sub-document
+    with its own export. Every other kind — and a grant written before parts
+    existed — uses the fixed list for its kind. Mirrors `subdocsOf()` in the
+    interface.
+    """
+    kind = document.get("kind", "publication")
+    parts = document.get("grantParts") if kind == "grant" else None
+    if isinstance(parts, list):
+        out = [(str(p["k"]), str(p.get("l") or p["k"]))
+               for p in parts if isinstance(p, dict) and p.get("k")]
+        if out:
+            return out
+    return list(SUBDOCS.get(kind, SUBDOCS["publication"]))
+
+
+def subdoc_filenames(document: dict, ext: str = "docx") -> dict[str, str]:
+    """Every sub-document's export file name, by key.
+
+    Named after the label. Two parts a person has given the same name would
+    otherwise plan the same file, so the second becomes `-2`, the third `-3`.
+    """
+    out: dict[str, str] = {}
+    used: set[str] = set()
+    for key, label in subdocs_for(document):
+        stem = slug(label)
+        name, n = stem, 1
+        while name in used:
+            n += 1
+            name = f"{stem}-{n}"
+        used.add(name)
+        out[key] = f"{name}.{ext}"
+    return out
+
+
+def subdoc_filename(kind_or_document: str | dict, subdoc_key: str, ext: str = "docx") -> str:
+    """`manuscript.docx`, `supporting-information.docx`, and so on.
+
+    Pass the document itself where it is to hand: a grant names its own parts,
+    so only the document knows that `g_x1y2z3a` is `vision-and-approach.docx`.
+    A kind alone gives the fixed names for that kind.
+    """
+    if isinstance(kind_or_document, dict):
+        document = kind_or_document
+    else:
+        document = {"kind": kind_or_document}
+    names = subdoc_filenames(document, ext)
+    if subdoc_key in names:
+        return names[subdoc_key]
     return f"{slug(subdoc_key)}.{ext}"
 
 
@@ -126,14 +175,15 @@ def equation_file(index: int) -> str:
 def equations_in_order(document: dict) -> list[dict]:
     """Every equation block in the document, in reading order.
 
-    Sub-documents are walked in the order the document's kind declares them,
-    then sections, then blocks — the same order the interface numbers them in,
-    so `equations/equation-03.tex` is the third equation a reader meets.
+    Sub-documents are walked in the order the document declares them (its
+    kind's fixed list, or a grant's own parts), then sections, then blocks —
+    the same order the interface numbers them in, so
+    `equations/equation-03.tex` is the third equation a reader meets.
     Unnumbered equations are included: they are still part of the record.
     """
     out: list[dict] = []
     subdocs = document.get("subdocs") or {}
-    keys = [k for k, _ in SUBDOCS.get(document.get("kind", "publication"), SUBDOCS["publication"])]
+    keys = [k for k, _ in subdocs_for(document)]
     for key in keys + [k for k in subdocs if k not in keys]:
         sub = subdocs.get(key) or {}
         for section in sub.get("sections") or []:
@@ -201,17 +251,16 @@ def plan_document(document: dict) -> list[PlannedPath]:
     """The complete folder plan for a document, in display order.
 
     `document` is the interface's state object. Only the keys used here matter:
-    kind, figures, tables, attachments, revisions, reviews, refs.
+    kind, grantParts, figures, tables, attachments, revisions, reviews, refs.
     """
-    kind = document.get("kind", "publication")
     out: list[PlannedPath] = []
 
     # The document itself, as the interface holds it. Written on every save so
     # the folder is complete on its own and the vault can be rebuilt from it.
     out.append(PlannedPath(DOCUMENT_FILE, "file", note="the document", generated=True))
 
-    for key, _label in SUBDOCS.get(kind, SUBDOCS["publication"]):
-        out.append(PlannedPath(subdoc_filename(kind, key), "file", note="export", generated=True))
+    for _key, name in subdoc_filenames(document).items():
+        out.append(PlannedPath(name, "file", note="export", generated=True))
 
     figures = document.get("figures") or []
     out.append(PlannedPath("figures", "dir"))

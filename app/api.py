@@ -32,7 +32,7 @@ from .services.safety import PathEscape, resolve_within
 from .services.store import Store
 from .services.workspace import NotADocumentFolder, Workspace
 
-API_VERSION = "1.2.0"
+API_VERSION = "1.4.0"
 
 
 # ---------------------------------------------------------------- schemas --
@@ -478,7 +478,13 @@ def put_library(request: Request, body: LibraryPut) -> dict:
 
 @router.get("/layout/preview")
 def layout_preview(request: Request, kind: str = "publication") -> dict:
-    """What a new document of this kind would create. Used by the New dialog."""
+    """What a document of this kind, with nothing in it yet, would plan.
+
+    A kind is all this is given, so for a grant it plans a grant with no
+    parts: the legacy four files `layout.subdocs_for` falls back to. A grant
+    names its exports after its own parts, which come from the format chosen
+    in the interface; a saved grant's real plan is `GET /documents/{id}/tree`.
+    """
     plan = layout_svc.plan_document({"kind": kind})
     return {"nodes": [asdict(p) for p in plan]}
 

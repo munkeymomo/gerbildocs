@@ -25,7 +25,7 @@ def _state():
         "sampleProps": [{"id": "pd_sa", "label": "BET surface area"}],
         "defs": [{"id": "df_xps", "short": "XPS"}],
         "styleLib": [{"id": "st_afm", "label": "Adv. Funct. Mater."}],
-        "me": {"name": "Mark Isaacs"},
+        "me": {"name": "Jane Doe"},
     }
 
 
@@ -52,6 +52,31 @@ def test_library_survives_a_new_document(tmp_path):
     assert merged["refs"][0]["title"] == "A paper"
     assert merged["samples"][0]["code"] == "TSB-07"
     assert first != second
+
+
+def test_uncertainties_and_sample_datasets_survive_the_vault(tmp_path):
+    """A property's kind of uncertainty, each sample's uncertainty beside its
+    value, and a plot dataset that refers to samples are library data like any
+    other: written and read back whole, not flattened or dropped."""
+    st = _store(tmp_path)
+    source = {"kind": "samples", "sampleIds": ["sm_07"],
+              "x": {"kind": "prop", "prop": "pd_sa"},
+              "cols": [{"kind": "typed", "values": {"sm_07": 0.4}, "err": {"sm_07": 0.05}}]}
+    st.put_library({
+        "sampleProps": [{"id": "pd_sa", "label": "BET surface area", "type": "number",
+                         "err": "sd"}],
+        "samples": [{"id": "sm_07", "code": "TSB-07", "props": {"pd_sa": "812"},
+                     "propErr": {"pd_sa": "15"}}],
+        "plots": [{"id": "pl_1",
+                   "datasets": [{"id": "ds_1", "source": source, "pointLabels": True}],
+                   "series": [{"ds": "ds_1", "col": 0, "name": "k"}]}],
+    })
+    doc_id = st.create_document("Fresh", "report", str(tmp_path / "a"),
+                                {"title": "Fresh", "kind": "report"})
+    merged = st.merge_state(st.get_document(doc_id)["state"])
+    assert merged["sampleProps"][0]["err"] == "sd"
+    assert merged["samples"][0]["propErr"] == {"pd_sa": "15"}
+    assert merged["plots"][0]["datasets"][0]["source"] == source
 
 
 def test_library_keys_are_the_only_thing_the_library_accepts(tmp_path):
@@ -253,7 +278,7 @@ def test_saved_people_and_organisations_are_app_scoped(tmp_path):
     import json
 
     st = Store(tmp_path / "desk.sqlite", library_dir=tmp_path / "library")
-    person = {"id": "p_mi", "name": "Isaacs, Mark A.", "orcid": "0000-0003-0335-4451",
+    person = {"id": "p_mi", "name": "Doe, Jane A.", "orcid": "0000-0002-1825-0097",
               "email": "mark@example.ac.uk",
               "orgs": [{"name": "Example University", "dept": "Chemistry",
                         "city": "London", "country": "UK", "ror": ""}],

@@ -190,14 +190,14 @@ class Workspace:
             raise NotADocumentFolder(f"{f} could not be read: {exc}") from exc
         state = data.get("state") if isinstance(data, dict) else None
         if not isinstance(state, dict):
-            raise NotADocumentFolder(f"{f} is not a Document Desk document")
+            raise NotADocumentFolder(f"{f} is not a GerbilDocs document")
         # Identity comes from the envelope this application writes, not from a
         # key the interface happens to add. A document created through the API
         # and not yet opened in the interface has no `subdocs`, and used to be
         # unrecognisable here — which made it undiscoverable and unadoptable.
         stamped = isinstance(data, dict) and data.get("app") in (APP_STAMP,) + LEGACY_STAMPS
         if not stamped and "subdocs" not in state:
-            raise NotADocumentFolder(f"{f} is not a Document Desk document")
+            raise NotADocumentFolder(f"{f} is not a GerbilDocs document")
         return DocumentFolder(
             root=r,
             title=str(data.get("title") or state.get("title") or r.name),
