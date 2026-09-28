@@ -22,4 +22,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The repository root, so `pytest` finds `app` the way `python -m pytest` does.
+pythonpath = ["."]
 addopts = "-q"
