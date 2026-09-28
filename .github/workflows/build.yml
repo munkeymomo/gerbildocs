@@ -4,9 +4,11 @@
 #
 #   push to main / a v* tag / pull request / "Run workflow" button
 #     -> test (Linux, fast)
-#     -> build-windows: pytest, selfcheck, fetch MathJax, PyInstaller, Inno Setup
-#     -> artifacts: the installer and a portable zip of the onedir bundle
-#     -> on a v* tag: attached to a GitHub Release
+#     -> build-windows: pytest, selfcheck, fetch MathJax, PyInstaller, Inno Setup,
+#        a smoke run, and a run of the portable zip tagged as a download
+#     -> artifacts: the installer, the portable zip, and every release file
+#     -> "Run workflow" with "Publish a release" ticked, or a v* tag:
+#        the GitHub release, with every file (docs/RELEASING.md)
 name: Build
 
 on:
@@ -15,9 +17,14 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a release for the version in pyproject.toml"
+        type: boolean
+        default: false
 
 permissions:
-  contents: write   # only used by the release job on a tag
+  contents: write   # only used by the release job
 
 jobs:
   test:
@@ -50,6 +57,9 @@ jobs:
     needs: test
     runs-on: windows-latest
     steps:
+      # Check out with the repository's own line endings, so the source zip
+      # and the standalone page match the repository byte for byte.
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -97,6 +107,48 @@ jobs:
           } finally {
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
           }
+      - name: Run the portable zip the way a download arrives
+        shell: pwsh
+        run: |
+          # Unzipped from a browser download with Explorer, every file carries a
+          # Zone.Identifier stream, and .NET refuses tagged assemblies. 1.4.0
+          # shipped a zip that failed exactly this way on everyone else's PC.
+          # Tag a copy the same way; the window's runtime must still load.
+          $zip = Get-ChildItem dist\GerbilDocs-*-win32.zip | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP "as-downloaded"
+          Expand-Archive $zip.FullName -DestinationPath $dir
+          $tag = "[ZoneTransfer]`r`nZoneId=3`r`n"
+          $files = Get-ChildItem $dir -Recurse -File
+          $files | ForEach-Object { Set-Content -LiteralPath $_.FullName -Stream Zone.Identifier -Value $tag }
+          "tagged $($files.Count) files as downloaded"
+          $exe = Get-ChildItem $dir -Recurse -Filter GerbilDocs.exe | Select-Object -First 1
+          $data = Join-Path $env:RUNNER_TEMP "as-downloaded-data"
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = $exe.FullName
+          $psi.Arguments = "--check-window --data-dir `"$data`""
+          $psi.UseShellExecute = $false   # no Attachment Manager prompt for a tagged .exe
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $p = [System.Diagnostics.Process]::Start($psi)
+          $out = $p.StandardOutput.ReadToEndAsync()
+          $err = $p.StandardError.ReadToEndAsync()
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "--check-window did not finish within 2 minutes" }
+          $out.Result; $err.Result
+          Get-ChildItem $data -Recurse -Filter desk.log -ErrorAction SilentlyContinue | ForEach-Object { Get-Content $_.FullName }
+          if ($p.ExitCode -ne 0) { throw "the window's runtime does not load from a downloaded copy of the zip" }
+      - name: Assemble the release files
+        shell: pwsh
+        run: |
+          $ver = python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+          New-Item -ItemType Directory -Force "release\$ver" | Out-Null
+          Copy-Item dist\installer\*.exe "release\$ver\"
+          python tools/make_release.py --skip-build
+      - name: Upload release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: GerbilDocs-release
+          path: release/
+          if-no-files-found: error
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
@@ -111,20 +163,48 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Attach to release
-    if: startsWith(github.ref, 'refs/tags/v')
+    name: Publish the release
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release)
     needs: build-windows
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          name: GerbilDocs-release
           path: out
-      # Only the installer. The portable zip, the standalone page, the source
-      # and SHA256SUMS are the files built and checked by tools/make_release.py
-      # and attached by hand; a CI zip of the same name would replace them.
-      # The release notes are RELEASE-NOTES-<version>.md, pasted by hand.
-      - uses: softprops/action-gh-release@v2
+      - name: Version, notes and files
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ver=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$ver" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $ver in pyproject.toml"; exit 1
+          fi
+          if gh release view "v$ver" >/dev/null 2>&1; then
+            echo "::error::release v$ver already exists; bump the version"; exit 1
+          fi
+          if [ ! -f "RELEASE-NOTES-$ver.md" ]; then
+            echo "::error::RELEASE-NOTES-$ver.md is missing; it is the release's body"; exit 1
+          fi
+          ls -l "out/$ver"
+          (cd "out/$ver" && sha256sum -c SHA256SUMS.txt)
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+      # A draft first, with every file on it, then published. SourceForge's
+      # GitHub sync copies a release when it is published and does not see
+      # files added afterwards. Publishing creates the tag at this commit.
+      - name: Create the release as a draft, with every file
+        uses: softprops/action-gh-release@v2
         with:
-          files: |
-            out/**/*.exe
-          generate_release_notes: false
+          tag_name: v${{ steps.v.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: GerbilDocs ${{ steps.v.outputs.version }}
+          body_path: RELEASE-NOTES-${{ steps.v.outputs.version }}.md
+          draft: true
+          files: out/${{ steps.v.outputs.version }}/*
+          fail_on_unmatched_files: true
+      - name: Publish it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "v${{ steps.v.outputs.version }}" --draft=false --latest

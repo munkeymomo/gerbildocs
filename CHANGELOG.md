@@ -3,6 +3,30 @@
 All notable changes to GerbilDocs are recorded here. GerbilDocs is released
 under the MIT licence. Dates are ISO.
 
+## 1.4.1 — 2026-09-28
+
+### Fixed
+
+- **The portable zip starts on other people's PCs.** Unzipped from a
+  download with Explorer, 1.4.0 stopped at once with "Failed to resolve
+  Python.Runtime.Loader.Initialize". Windows tags every file in a downloaded
+  zip as coming from the internet, and .NET will not load tagged DLLs, which
+  the app's window needs. GerbilDocs now clears that tag from its own DLLs
+  when it starts. If you have the 1.4.0 zip, right-click it, choose
+  Properties, tick Unblock, then unzip it again; or download 1.4.1.
+
+### Changed
+
+- **No window, no crash.** If the app's own window can't start for any
+  reason, GerbilDocs opens in your web browser instead, with a small box that
+  closes it when you're done. What went wrong is written to `desk.log`.
+- **Every release is checked as a download.** The build unzips the portable
+  zip, tags it the way a download is tagged, and fails unless the window's
+  runtime loads.
+- **Releases are published by the build, with every file attached**: the
+  installer, the portable zip, the standalone page, the source, the notes and
+  SHA256SUMS. SourceForge copies them from GitHub automatically.
+
 ## 1.4.0 — 2026-09-28
 
 ### Added

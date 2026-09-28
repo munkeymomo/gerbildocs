@@ -6,17 +6,21 @@ configure and no browser to install: on Windows the window is EdgeWebView2,
 which ships with Windows 10 and 11.
 
 `--browser` opens the user's default browser instead, which is how you develop
-and how you check something when a webview misbehaves.
+and how you check something when a webview misbehaves. If the native window
+cannot start at all, the launcher falls back to the browser by itself rather
+than stopping with a traceback.
 """
 
 from __future__ import annotations
 
 import argparse
 import contextlib
+import os
 import socket
 import sys
 import threading
 import time
+import traceback
 import webbrowser
 from pathlib import Path
 
@@ -60,6 +64,78 @@ def _route_output_to_log(logs_dir: Path) -> None:
         pass
 
 
+def trust_own_dlls() -> int:
+    """Clear the "downloaded from the internet" tag from the bundle's own DLLs.
+
+    Unzipping a downloaded zip with Explorer tags every file it writes with an
+    NTFS stream named Zone.Identifier. .NET Framework refuses to load a tagged
+    file as an assembly, and the native window runs on .NET (pythonnet, Windows
+    Forms, WebView2), so a portable copy unzipped from a download stopped at
+    start-up with "Failed to resolve Python.Runtime.Loader.Initialize". This
+    does for our own DLLs what right-click > Properties > Unblock does.
+
+    Only a frozen Windows build, only files inside its own bundle, and every
+    failure is ignored: an installed copy carries no tags, and may sit where
+    it cannot be written to. Returns how many tags it cleared.
+    """
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return 0
+    bundle = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    cleared = 0
+    for dll in bundle.rglob("*.dll"):
+        try:
+            os.remove(f"{dll}:Zone.Identifier")
+            cleared += 1
+        except OSError:
+            pass
+    return cleared
+
+
+def check_window() -> int:
+    """Load everything the native window needs, open nothing, and report.
+
+    The build runs this against its portable zip after tagging every file the
+    way a browser download and Explorer do, so a release that would fail on
+    someone else's PC fails the build instead. Exit status 0 means it loads.
+    """
+    cleared = trust_own_dlls()
+    try:
+        import webview.platforms.winforms  # noqa: F401 - pythonnet, WinForms, WebView2
+    except Exception:  # noqa: BLE001 - any failure here is the answer
+        traceback.print_exc()
+        print(f"window runtime failed to load ({cleared} tags cleared)", file=sys.stderr)
+        return 1
+    print(f"window runtime loads ({cleared} tags cleared)")
+    return 0
+
+
+def browser_fallback(url: str, logs_dir: Path) -> None:
+    """The native window could not start. The backend is already up, so open
+    the same page in the default browser, and give the person a way to quit:
+    on Windows, a message box that closes GerbilDocs when it is dismissed."""
+    print("the native window did not start; opening the browser instead", file=sys.stderr)
+    webbrowser.open(url)
+    if sys.platform != "win32":
+        threading.Event().wait()
+        return
+    try:
+        import ctypes
+
+        mb_ok, mb_iconinformation, mb_setforeground = 0x0, 0x40, 0x10000
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            "GerbilDocs couldn't open its own window, so it has opened in your "
+            "web browser instead.\n\n"
+            "Keep this box open while you work. Click OK to close GerbilDocs.\n\n"
+            f"What went wrong is recorded in {logs_dir / 'desk.log'}",
+            WINDOW_TITLE,
+            mb_ok | mb_iconinformation | mb_setforeground,
+        )
+    except Exception:  # noqa: BLE001 - no message box: keep serving until stopped
+        traceback.print_exc()
+        threading.Event().wait()
+
+
 def serve(app, host: str, port: int) -> threading.Thread:
     import uvicorn
 
@@ -78,11 +154,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=0, help="fix the port (default: pick a free one)")
     parser.add_argument("--data-dir", default=None, help="override the application data folder")
     parser.add_argument("--no-open", action="store_true", help="serve only; open nothing")
+    parser.add_argument("--check-window", action="store_true",
+                        help="load the native window's runtime, open nothing, and exit "
+                             "(0 if it loads); the build's download check")
     args = parser.parse_args(argv)
 
     settings = load_settings(Path(args.data_dir) if args.data_dir else None)
     settings.port = args.port or free_port(settings.host)
     _route_output_to_log(settings.paths.logs)
+
+    if args.check_window:
+        return check_window()
 
     from app.api import create_app
     app = create_app(settings)
@@ -106,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         threading.Event().wait()
         return 0
 
+    trust_own_dlls()
     try:
         import webview  # pywebview
     except ImportError:
@@ -114,8 +197,13 @@ def main(argv: list[str] | None = None) -> int:
         threading.Event().wait()
         return 0
 
-    window = webview.create_window(WINDOW_TITLE, url, width=1440, height=920,
-                                   min_size=(900, 620), confirm_close=False)
+    try:
+        window = webview.create_window(WINDOW_TITLE, url, width=1440, height=920,
+                                       min_size=(900, 620), confirm_close=False)
+    except Exception:  # noqa: BLE001 - no window is not a reason to stop
+        traceback.print_exc()
+        browser_fallback(url, settings.paths.logs)
+        return 0
 
     def pick_folder() -> str | None:
         """Native folder dialog for the interface's "Open an existing folder".
@@ -131,7 +219,12 @@ def main(argv: list[str] | None = None) -> int:
         return str(chosen[0] if isinstance(chosen, (list, tuple)) else chosen)
 
     app.state.pick_folder = pick_folder
-    webview.start()
+    try:
+        webview.start()
+    except Exception:  # noqa: BLE001 - a missing or blocked runtime: use the browser
+        traceback.print_exc()
+        app.state.pick_folder = None  # no window, so no native folder dialog
+        browser_fallback(url, settings.paths.logs)
     return 0
 
 

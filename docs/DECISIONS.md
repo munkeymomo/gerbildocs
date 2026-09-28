@@ -615,3 +615,38 @@ register that takes the samples over maps it or ignores it.
   label and shape, so the same CSL is not added twice.
 - **The undo history holds each style's source once**, as it holds images,
   not once per step.
+
+## A downloaded copy starts, or falls back to the browser (28 September 2026)
+
+- **The launcher clears the download tag from its own DLLs.** Windows tags
+  every file unzipped from a browser download with a `Zone.Identifier`
+  stream, and .NET Framework will not load a tagged file as an assembly. The
+  native window runs on .NET (pythonnet, Windows Forms, WebView2), so the
+  1.4.0 portable zip, unzipped with Explorer, stopped at start-up with
+  "Failed to resolve Python.Runtime.Loader.Initialize". Before importing the
+  window, a frozen Windows build now removes that stream from each `*.dll`
+  under its own bundle, which is what Properties > Unblock does. Nothing
+  outside the bundle is touched, and failures are ignored (an installed copy
+  has no tags and may be read-only).
+- **Tried and rejected: a .NET config with `loadFromRemoteSources`.** Passed
+  to pythonnet's AppDomain (`PYTHONNET_NETFX_CONFIG_FILE`), it did not let the
+  tagged `Python.Runtime.dll` load; tested against a tagged copy of 1.4.0.
+- **No native window is not a reason to stop.** If creating or starting the
+  window raises, the backend is already up, so the launcher opens the same
+  page in the default browser and shows a message box; closing the box closes
+  GerbilDocs, and the traceback goes to `desk.log`. The native folder dialog
+  is withdrawn, since there is no window to own it.
+- **The build checks the zip the way people get it.** CI unzips the portable
+  zip, tags every file as downloaded, and runs `GerbilDocs.exe
+  --check-window`, which clears the tags, loads the window's runtime, opens
+  nothing and exits 0 if it loaded. A release that would fail on someone
+  else's PC fails the build instead.
+- **The release is built and published by CI, with every file.** A
+  `workflow_dispatch` run with *Publish a release* ticked (or a `v*` tag)
+  builds the installer, the portable zip, the standalone page, the source
+  zip, the notes and SHA256SUMS, creates the release as a draft with all of
+  them, and publishes it. SourceForge's GitHub sync copies a release when it
+  is published and, by its own documentation, does not see files added
+  later, so the files must be on it first. The 1.4.0 release was published
+  with the installer alone and the rest attached by hand. The job refuses to run if
+  the release exists or `RELEASE-NOTES-<version>.md` is missing.

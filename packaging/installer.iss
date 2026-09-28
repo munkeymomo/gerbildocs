@@ -6,7 +6,7 @@
 ; The version comes from pyproject.toml via packaging/build.py (/DAppVersion=…);
 ; this default is only for running ISCC by hand.
 #ifndef AppVersion
-  #define AppVersion "1.4.0"
+  #define AppVersion "1.4.1"
 #endif
 #define AppPublisher "Mark Isaacs"
 #define AppExe     "GerbilDocs.exe"

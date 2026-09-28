@@ -16444,7 +16444,7 @@ function isEditing(el){ return !!el&&(el.tagName==="TEXTAREA"||(el.tagName==="IN
 /* ---- credit bar: support link and About ----
    The desktop backend may inject window.__DESK_PROFILE from profile.json;
    opened on its own the page falls back to the placeholder below. */
-const APP_VERSION="1.4.0";
+const APP_VERSION="1.4.1";
 /* The backend reports the version it is actually running; standalone, the
    constant above is the whole truth. */
 function appVersion(){ try{ return (DESK.info&&DESK.info.version)||APP_VERSION; }catch(e){ return APP_VERSION; } }

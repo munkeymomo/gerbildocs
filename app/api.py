@@ -32,7 +32,7 @@ from .services.safety import PathEscape, resolve_within
 from .services.store import Store
 from .services.workspace import NotADocumentFolder, Workspace
 
-API_VERSION = "1.4.0"
+API_VERSION = "1.4.1"
 
 
 # ---------------------------------------------------------------- schemas --
